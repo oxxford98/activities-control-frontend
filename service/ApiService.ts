@@ -263,37 +263,6 @@ class ApiService {
     ): Promise<AxiosResponse<T>> {
         return await ApiService.axiosInstance.patch<T>(resource, params);
     }
-
-    // Public requests without authentication
-
-    /**
-     * Public GET request with query parameters
-     */
-    static async queryPublic<T = any>(
-        resource: string,
-        params?: Record<string, any>
-    ): Promise<AxiosResponse<T>> {
-        return await ApiService.axiosInstance.get<T>(resource, { params });
-    }
-
-    /**
-     * Public GET request with optional slug
-     */
-    static async getPublic<T = any>(resource: string, slug: string = ''): Promise<AxiosResponse<T>> {
-        const url = `${resource}${slug ? `/${slug}` : ''}`;
-        return await ApiService.axiosInstance.get<T>(url);
-    }
-
-    /**
-     * Public POST request
-     */
-    static async postPublic<T = any, D = any>(
-        resource: string,
-        payload: D,
-        params?: Record<string, any>
-    ): Promise<AxiosResponse<T>> {
-        return await ApiService.axiosInstance.post<T>(resource, payload, { params });
-    }
 }
 
 export default ApiService;
