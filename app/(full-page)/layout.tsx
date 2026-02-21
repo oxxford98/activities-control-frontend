@@ -7,8 +7,8 @@ interface SimpleLayoutProps {
 }
 
 export const metadata: Metadata = {
-    title: 'PrimeReact Sakai',
-    description: 'The ultimate collection of design-agnostic, flexible and accessible React UI Components.'
+    title: 'PlanificaUni',
+    description: 'App para planificación de actividades académicas'
 };
 
 export default function SimpleLayout({ children }: SimpleLayoutProps) {
