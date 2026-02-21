@@ -2,6 +2,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 import { useEventListener, useMountEffect, useUnmountEffect } from 'primereact/hooks';
 import React, { useContext, useEffect, useRef } from 'react';
 import { classNames } from 'primereact/utils';
@@ -12,7 +13,20 @@ import AppConfig from './AppConfig';
 import { LayoutContext } from './context/layoutcontext';
 import { PrimeReactContext } from 'primereact/api';
 import { ChildContainerProps, LayoutState, AppTopbarRef } from '@/types';
+// ...existing code...
 import { usePathname, useSearchParams } from 'next/navigation';
+
+
+// Componente hijo para hooks de navegación
+const LayoutHooks = ({ hideMenu, hideProfileMenu }: { hideMenu: () => void; hideProfileMenu: () => void }) => {
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        hideMenu();
+        hideProfileMenu();
+    }, [pathname, searchParams]);
+    return null;
+};
 
 const Layout = ({ children }: ChildContainerProps) => {
     const { layoutConfig, layoutState, setLayoutState } = useContext(LayoutContext);
@@ -28,19 +42,11 @@ const Layout = ({ children }: ChildContainerProps) => {
                 topbarRef.current?.menubutton?.isSameNode(event.target as Node) ||
                 topbarRef.current?.menubutton?.contains(event.target as Node)
             );
-
             if (isOutsideClicked) {
                 hideMenu();
             }
         }
     });
-
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
-    useEffect(() => {
-        hideMenu();
-        hideProfileMenu();
-    }, [pathname, searchParams]);
 
     const [bindProfileMenuOutsideClickListener, unbindProfileMenuOutsideClickListener] = useEventListener({
         type: 'click',
@@ -51,7 +57,6 @@ const Layout = ({ children }: ChildContainerProps) => {
                 topbarRef.current?.topbarmenubutton?.isSameNode(event.target as Node) ||
                 topbarRef.current?.topbarmenubutton?.contains(event.target as Node)
             );
-
             if (isOutsideClicked) {
                 hideProfileMenu();
             }
@@ -97,7 +102,6 @@ const Layout = ({ children }: ChildContainerProps) => {
         if (layoutState.overlayMenuActive || layoutState.staticMenuMobileActive) {
             bindMenuOutsideClickListener();
         }
-
         layoutState.staticMenuMobileActive && blockBodyScroll();
     }, [layoutState.overlayMenuActive, layoutState.staticMenuMobileActive]);
 
@@ -124,6 +128,9 @@ const Layout = ({ children }: ChildContainerProps) => {
 
     return (
         <React.Fragment>
+            <Suspense fallback={null}>
+                <LayoutHooks hideMenu={hideMenu} hideProfileMenu={hideProfileMenu} />
+            </Suspense>
             <div className={containerClass}>
                 <AppTopbar ref={topbarRef} />
                 <div ref={sidebarRef} className="layout-sidebar">
