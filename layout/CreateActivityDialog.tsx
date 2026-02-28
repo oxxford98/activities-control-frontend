@@ -26,6 +26,12 @@ interface CreateActivityPayload {
     user: number;
 }
 
+interface RequiredFieldErrors {
+    title: boolean;
+    typeActivity: boolean;
+    subject: boolean;
+}
+
 const ACTIVITY_TYPE_OPTIONS = [
     { label: 'Examen', value: 'Examen' },
     { label: 'Quiz', value: 'Quiz' },
@@ -90,13 +96,20 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
     const [loggedUserId, setLoggedUserId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<RequiredFieldErrors>({
+        title: false,
+        typeActivity: false,
+        subject: false
+    });
 
     const activityCreateEndpoint = process.env.NEXT_PUBLIC_ACTIVITY_CREATE_ENDPOINT || '/activities/';
     const activityCreateUrl = activityCreateEndpoint.startsWith('http') ? activityCreateEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${activityCreateEndpoint}`;
 
     useEffect(() => {
         if (!visible) return;
+
+        setError('');
+        setFieldErrors({ title: false, typeActivity: false, subject: false });
 
         const bootstrapSession = async () => {
             const token = getSessionToken();
@@ -147,9 +160,14 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
     const handleCreateActivity = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setError('');
-        setSuccess('');
+        const nextErrors: RequiredFieldErrors = {
+            title: !titulo.trim(),
+            typeActivity: !typeActivity.trim(),
+            subject: !subject.trim()
+        };
+        setFieldErrors(nextErrors);
 
-        if (!titulo.trim() || !typeActivity.trim() || !subject.trim()) {
+        if (nextErrors.title || nextErrors.typeActivity || nextErrors.subject) {
             setError('Completa los campos requeridos: título, tipo de actividad y materia.');
             return;
         }
@@ -199,7 +217,6 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                 throw new Error(formatApiError(errorData));
             }
 
-            setSuccess('Actividad creada correctamente.');
             setTitulo('');
             setTypeActivity('');
             setSubject('');
@@ -207,7 +224,12 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
             setEventDate('');
             setDeadline('');
             setGrade('');
-            window.dispatchEvent(new Event('activity-created'));
+            onHide();
+            window.dispatchEvent(
+                new CustomEvent('activity-created', {
+                    detail: { message: 'Registro exitoso' }
+                })
+            );
         } catch (err: any) {
             setError(err.message || 'Error al crear la actividad.');
         } finally {
@@ -233,7 +255,18 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                     <label htmlFor="titulo" className="font-medium">
                         Título *
                     </label>
-                    <InputText id="titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Escribe un título" />
+                    <InputText
+                        id="titulo"
+                        value={titulo}
+                        onChange={(e) => {
+                            setTitulo(e.target.value);
+                            if (fieldErrors.title && e.target.value.trim()) {
+                                setFieldErrors((prev) => ({ ...prev, title: false }));
+                            }
+                        }}
+                        placeholder="Escribe un título"
+                        className={fieldErrors.title ? 'p-invalid' : ''}
+                    />
                 </div>
 
                 <div className="flex flex-column gap-2">
@@ -244,9 +277,14 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                         id="typeActivity"
                         value={typeActivity}
                         options={ACTIVITY_TYPE_OPTIONS}
-                        onChange={(e) => setTypeActivity(e.value)}
+                        onChange={(e) => {
+                            setTypeActivity(e.value);
+                            if (fieldErrors.typeActivity && String(e.value || '').trim()) {
+                                setFieldErrors((prev) => ({ ...prev, typeActivity: false }));
+                            }
+                        }}
                         placeholder="Selecciona un tipo"
-                        className="w-full"
+                        className={`w-full ${fieldErrors.typeActivity ? 'p-invalid' : ''}`}
                     />
                 </div>
 
@@ -254,7 +292,18 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                     <label htmlFor="subject" className="font-medium">
                         Materia *
                     </label>
-                    <InputText id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Ejemplo: Matemáticas" />
+                    <InputText
+                        id="subject"
+                        value={subject}
+                        onChange={(e) => {
+                            setSubject(e.target.value);
+                            if (fieldErrors.subject && e.target.value.trim()) {
+                                setFieldErrors((prev) => ({ ...prev, subject: false }));
+                            }
+                        }}
+                        placeholder="Ejemplo: Matemáticas"
+                        className={fieldErrors.subject ? 'p-invalid' : ''}
+                    />
                 </div>
 
                 <div className="flex flex-column gap-2">
@@ -297,7 +346,6 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                 </div>
 
                 {error && <div className="text-red-500 font-medium">{error}</div>}
-                {success && <div className="text-green-500 font-medium">{success}</div>}
 
                 <div className="flex justify-content-end gap-2">
                     <Button type="button" label="Cancelar" severity="secondary" outlined onClick={onHide} />
