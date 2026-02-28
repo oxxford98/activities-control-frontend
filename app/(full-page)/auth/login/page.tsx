@@ -9,6 +9,9 @@ import { LayoutContext } from '../../../../layout/context/layoutcontext';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
+import JwtService from '@/service/JwtService';
+import { useAuthStore } from '@/stores/auth';
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');
@@ -37,9 +40,27 @@ const LoginPage = () => {
             }
 
             const data = await response.json();
-            localStorage.setItem('access_token', data.access);
-            localStorage.setItem('user', JSON.stringify(data.user));
-            router.push('/');
+            const accessToken = data?.access || data?.access_token || data?.token?.access;
+            const refreshToken = data?.refresh || data?.refresh_token;
+            const userData = data?.user;
+
+            if (!accessToken) {
+                throw new Error('Respuesta de login sin token de acceso');
+            }
+
+            localStorage.setItem('access_token', accessToken);
+            JwtService.saveToken(accessToken);
+
+            if (refreshToken) {
+                JwtService.saveRefreshToken(refreshToken);
+            }
+
+            if (userData) {
+                localStorage.setItem('user', JSON.stringify(userData));
+                useAuthStore.getState().setAuth({ user: userData, access: accessToken });
+            }
+
+            router.push(ROUTES.HOME);
         } catch (err: any) {
             setError(err.message || 'Error al iniciar sesión');
         } finally {
@@ -86,7 +107,7 @@ const LoginPage = () => {
 
                             <div className="text-center mt-5">
                                 <span className="text-600">¿Aún no tienes una cuenta? </span>
-                                <Link href="/auth/register" className="font-medium no-underline cursor-pointer" style={{ color: 'var(--primary-color)' }}>
+                                <Link href={ROUTES.AUTH.REGISTER} className="font-medium no-underline cursor-pointer" style={{ color: 'var(--primary-color)' }}>
                                     Crear una cuenta
                                 </Link>
                             </div>

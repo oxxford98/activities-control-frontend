@@ -4,12 +4,13 @@
 import { useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import { useEventListener, useMountEffect, useUnmountEffect } from 'primereact/hooks';
-import React, { useContext, useEffect, useRef } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { classNames } from 'primereact/utils';
 import AppFooter from './AppFooter';
 import AppSidebar from './AppSidebar';
 import AppTopbar from './AppTopbar';
 import AppConfig from './AppConfig';
+import CreateActivityDialog from './CreateActivityDialog';
 import { LayoutContext } from './context/layoutcontext';
 import { PrimeReactContext } from 'primereact/api';
 import { ChildContainerProps, LayoutState, AppTopbarRef } from '@/types';
@@ -33,6 +34,7 @@ const Layout = ({ children }: ChildContainerProps) => {
     const { setRipple } = useContext(PrimeReactContext);
     const topbarRef = useRef<AppTopbarRef>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
+    const [createDialogVisible, setCreateDialogVisible] = useState(false);
     const [bindMenuOutsideClickListener, unbindMenuOutsideClickListener] = useEventListener({
         type: 'click',
         listener: (event) => {
@@ -111,6 +113,15 @@ const Layout = ({ children }: ChildContainerProps) => {
         }
     }, [layoutState.profileSidebarVisible]);
 
+    useEffect(() => {
+        const openCreateDialog = () => setCreateDialogVisible(true);
+        window.addEventListener('open-create-activity-dialog', openCreateDialog);
+
+        return () => {
+            window.removeEventListener('open-create-activity-dialog', openCreateDialog);
+        };
+    }, []);
+
     useUnmountEffect(() => {
         unbindMenuOutsideClickListener();
         unbindProfileMenuOutsideClickListener();
@@ -141,6 +152,7 @@ const Layout = ({ children }: ChildContainerProps) => {
                     <AppFooter />
                 </div>
                 <AppConfig />
+                <CreateActivityDialog visible={createDialogVisible} onHide={() => setCreateDialogVisible(false)} />
                 <div className="layout-mask"></div>
             </div>
         </React.Fragment>

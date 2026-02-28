@@ -8,6 +8,7 @@ import { LayoutContext } from '../../../../layout/context/layoutcontext';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
 
 const RegisterPage = () => {
     const [firstName, setFirstName] = useState('');
@@ -67,7 +68,7 @@ const RegisterPage = () => {
 
             setSuccess('¡Cuenta creada exitosamente! Redirigiendo al login...');
             setTimeout(() => {
-                router.push('/auth/login');
+                router.push(ROUTES.AUTH.LOGIN);
             }, 2000);
         } catch (err: any) {
             setError(err.message || 'Error al registrar');
@@ -171,7 +172,7 @@ const RegisterPage = () => {
 
                             <div className="text-center mt-5">
                                 <span className="text-600">¿Ya tienes una cuenta? </span>
-                                <Link href="/auth/login" className="font-medium no-underline cursor-pointer" style={{ color: 'var(--primary-color)' }}>
+                                <Link href={ROUTES.AUTH.LOGIN} className="font-medium no-underline cursor-pointer" style={{ color: 'var(--primary-color)' }}>
                                     Inicia sesión
                                 </Link>
                             </div>
