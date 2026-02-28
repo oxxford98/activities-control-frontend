@@ -40,7 +40,6 @@ const ACTIVITY_TYPE_OPTIONS = [
     { label: 'Otro', value: 'Otro' }
 ];
 
-
 const formatApiError = (errorData: any): string => {
     if (!errorData) return 'No se pudo crear la actividad.';
 
@@ -101,6 +100,11 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
         typeActivity: false,
         subject: false
     });
+    const [touched, setTouched] = useState<RequiredFieldErrors>({
+        title: false,
+        typeActivity: false,
+        subject: false
+    });
 
     const activityCreateEndpoint = process.env.NEXT_PUBLIC_ACTIVITY_CREATE_ENDPOINT || '/activities/';
     const activityCreateUrl = activityCreateEndpoint.startsWith('http') ? activityCreateEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${activityCreateEndpoint}`;
@@ -110,6 +114,7 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
 
         setError('');
         setFieldErrors({ title: false, typeActivity: false, subject: false });
+        setTouched({ title: false, typeActivity: false, subject: false });
 
         const bootstrapSession = async () => {
             const token = getSessionToken();
@@ -160,12 +165,14 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
     const handleCreateActivity = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setError('');
+
         const nextErrors: RequiredFieldErrors = {
             title: !titulo.trim(),
             typeActivity: !typeActivity.trim(),
             subject: !subject.trim()
         };
         setFieldErrors(nextErrors);
+        setTouched({ title: true, typeActivity: true, subject: true });
 
         if (nextErrors.title || nextErrors.typeActivity || nextErrors.subject) {
             setError('Completa los campos requeridos: título, tipo de actividad y materia.');
@@ -251,6 +258,7 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                     Bienvenido, <span className="font-semibold text-900">{displayName}</span>
                 </p>
 
+                {/* Título */}
                 <div className="flex flex-column gap-2">
                     <label htmlFor="titulo" className="font-medium">
                         Título *
@@ -260,15 +268,23 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                         value={titulo}
                         onChange={(e) => {
                             setTitulo(e.target.value);
-                            if (fieldErrors.title && e.target.value.trim()) {
+                            if (e.target.value.trim()) {
                                 setFieldErrors((prev) => ({ ...prev, title: false }));
                             }
                         }}
+                        onBlur={() => {
+                            setTouched((prev) => ({ ...prev, title: true }));
+                            setFieldErrors((prev) => ({ ...prev, title: !titulo.trim() }));
+                        }}
                         placeholder="Escribe un título"
-                        className={fieldErrors.title ? 'p-invalid' : ''}
+                        className={fieldErrors.title || (touched.title && !titulo.trim()) ? 'p-invalid' : ''}
                     />
+                    {(fieldErrors.title || (touched.title && !titulo.trim())) && (
+                        <small className="p-error">El título es obligatorio.</small>
+                    )}
                 </div>
 
+                {/* Tipo de actividad */}
                 <div className="flex flex-column gap-2">
                     <label htmlFor="typeActivity" className="font-medium">
                         Tipo de actividad *
@@ -279,15 +295,24 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                         options={ACTIVITY_TYPE_OPTIONS}
                         onChange={(e) => {
                             setTypeActivity(e.value);
-                            if (fieldErrors.typeActivity && String(e.value || '').trim()) {
+                            if (String(e.value || '').trim()) {
                                 setFieldErrors((prev) => ({ ...prev, typeActivity: false }));
                             }
+                            setTouched((prev) => ({ ...prev, typeActivity: true }));
+                        }}
+                        onBlur={() => {
+                            setTouched((prev) => ({ ...prev, typeActivity: true }));
+                            setFieldErrors((prev) => ({ ...prev, typeActivity: !typeActivity.trim() }));
                         }}
                         placeholder="Selecciona un tipo"
-                        className={`w-full ${fieldErrors.typeActivity ? 'p-invalid' : ''}`}
+                        className={`w-full ${fieldErrors.typeActivity || (touched.typeActivity && !typeActivity.trim()) ? 'p-invalid' : ''}`}
                     />
+                    {(fieldErrors.typeActivity || (touched.typeActivity && !typeActivity.trim())) && (
+                        <small className="p-error">El tipo de actividad es obligatorio.</small>
+                    )}
                 </div>
 
+                {/* Materia */}
                 <div className="flex flex-column gap-2">
                     <label htmlFor="subject" className="font-medium">
                         Materia *
@@ -297,15 +322,23 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                         value={subject}
                         onChange={(e) => {
                             setSubject(e.target.value);
-                            if (fieldErrors.subject && e.target.value.trim()) {
+                            if (e.target.value.trim()) {
                                 setFieldErrors((prev) => ({ ...prev, subject: false }));
                             }
                         }}
+                        onBlur={() => {
+                            setTouched((prev) => ({ ...prev, subject: true }));
+                            setFieldErrors((prev) => ({ ...prev, subject: !subject.trim() }));
+                        }}
                         placeholder="Ejemplo: Matemáticas"
-                        className={fieldErrors.subject ? 'p-invalid' : ''}
+                        className={fieldErrors.subject || (touched.subject && !subject.trim()) ? 'p-invalid' : ''}
                     />
+                    {(fieldErrors.subject || (touched.subject && !subject.trim())) && (
+                        <small className="p-error">La materia es obligatoria.</small>
+                    )}
                 </div>
 
+                {/* Descripción */}
                 <div className="flex flex-column gap-2">
                     <label htmlFor="descripcion" className="font-medium">
                         Descripción
@@ -319,6 +352,7 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                     />
                 </div>
 
+                {/* Fechas */}
                 <div className="grid">
                     <div className="col-12 md:col-6">
                         <div className="flex flex-column gap-2">
@@ -338,6 +372,7 @@ const CreateActivityDialog = ({ visible, onHide }: CreateActivityDialogProps) =>
                     </div>
                 </div>
 
+                {/* Nota */}
                 <div className="flex flex-column gap-2">
                     <label htmlFor="grade" className="font-medium">
                         Nota
