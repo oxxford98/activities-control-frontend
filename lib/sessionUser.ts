@@ -61,6 +61,9 @@ export const getSessionToken = (): string | null => {
 
     const candidates = [localStorage.getItem('access_token'), JwtService.getToken()].filter(isValidCandidate);
 
+    let selectedToken: string | null = null;
+    let selectedExp = -1;
+
     for (const candidate of candidates) {
         const payload = decodeSessionTokenPayload(candidate);
         if (!payload) continue;
@@ -70,10 +73,14 @@ export const getSessionToken = (): string | null => {
             continue;
         }
 
-        return candidate;
+        const exp = typeof payload?.exp === 'number' ? payload.exp : -1;
+        if (exp > selectedExp) {
+            selectedExp = exp;
+            selectedToken = candidate;
+        }
     }
 
-    return null;
+    return selectedToken;
 };
 
 export const decodeSessionTokenPayload = (token: string): TokenPayload | null => {
