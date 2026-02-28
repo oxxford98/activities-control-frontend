@@ -8,9 +8,11 @@ import { Dialog } from 'primereact/dialog';
 import { Dropdown } from 'primereact/dropdown';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { decodeSessionTokenPayload, getSessionToken } from '@/lib/sessionUser';
+import { Toast } from 'primereact/toast';
+
 
 interface ActivityItem {
     id: number;
@@ -58,6 +60,7 @@ const ACTIVITY_TYPE_OPTIONS = [
 ];
 
 const ActivitiesPage = () => {
+    const toastRef = useRef<Toast>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [activitiesLoading, setActivitiesLoading] = useState(false);
     const [activitiesError, setActivitiesError] = useState('');
@@ -91,6 +94,9 @@ const ActivitiesPage = () => {
     const [estimatedTime, setEstimatedTime] = useState('');
     const [subtaskMessage, setSubtaskMessage] = useState('');
     const [subtaskLoading, setSubtaskLoading] = useState(false);
+
+    const [subtaskFieldErrors, setSubtaskFieldErrors] = useState({ name: false, targetDate: false, estimatedTime: false });
+    const [subtaskTouched, setSubtaskTouched] = useState({ name: false, targetDate: false, estimatedTime: false });
 
     const workPlanEndpoint = process.env.NEXT_PUBLIC_WORK_PLAN_ENDPOINT || '/sub-activities/';
     const workPlanUrl = workPlanEndpoint.startsWith('http') ? workPlanEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${workPlanEndpoint}`;
@@ -279,6 +285,8 @@ const ActivitiesPage = () => {
         setTargetDate('');
         setEstimatedTime('');
         setSubtaskMessage('');
+        setSubtaskFieldErrors({ name: false, targetDate: false, estimatedTime: false });
+        setSubtaskTouched({ name: false, targetDate: false, estimatedTime: false });
         fetchActivityDetail(activity.id);
         fetchSubActivitiesByActivity(activity.id);
     };
@@ -554,8 +562,28 @@ const ActivitiesPage = () => {
     const handleSubtaskSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!taskName.trim() || !taskDescription.trim() || !targetDate || !estimatedTime.trim() || !selectedActivity?.id) {
-            setSubtaskMessage('Completa todos los campos de la subtarea.');
+        const nextErrors = {
+            name: !taskName.trim(),
+            targetDate: !targetDate,
+            estimatedTime: !estimatedTime.trim()
+        };
+        setSubtaskFieldErrors(nextErrors);
+        setSubtaskTouched({ name: true, targetDate: true, estimatedTime: true });
+        setShowWorkPlanForm(false); 
+            toastRef.current?.show({   
+                severity: 'success',
+                summary: 'Subtarea creada',
+                detail: 'El plan de trabajo se creó correctamente.',
+                life: 3000
+            });
+
+        if (nextErrors.name || nextErrors.targetDate || nextErrors.estimatedTime) {
+            setSubtaskMessage('Completa los campos obligatorios.');
+            return;
+        }
+
+        if (!selectedActivity?.id) {
+            setSubtaskMessage('Selecciona una actividad primero.');
             return;
         }
 
@@ -610,6 +638,8 @@ const ActivitiesPage = () => {
             setTaskDescription('');
             setTargetDate('');
             setEstimatedTime('');
+            setSubtaskFieldErrors({ name: false, targetDate: false, estimatedTime: false });
+            setSubtaskTouched({ name: false, targetDate: false, estimatedTime: false });
             fetchSubActivitiesByActivity(selectedActivity.id);
         } catch (error: any) {
             setSubtaskMessage(error.message || 'Error al crear el plan de trabajo.');
@@ -652,6 +682,7 @@ const ActivitiesPage = () => {
 
     return (
         <Card title="Actividades">
+            <Toast ref={toastRef} />
             <div className="flex flex-column gap-4">
                 <div className="flex justify-content-end">
                     <Button label="Crear actividad" icon="pi pi-plus" onClick={handleOpenCreateDialog} />
@@ -720,13 +751,33 @@ const ActivitiesPage = () => {
 
                                     {showWorkPlanForm && (
                                         <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
+                                            {/* Nombre */}
                                             <div className="flex flex-column gap-2">
                                                 <label htmlFor="taskName" className="font-semibold">
-                                                    Nombre
+                                                    Nombre *
                                                 </label>
-                                                <InputText id="taskName" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Nombre de la subtarea" />
+                                                <InputText
+                                                    id="taskName"
+                                                    value={taskName}
+                                                    onChange={(e) => {
+                                                        setTaskName(e.target.value);
+                                                        if (e.target.value.trim()) {
+                                                            setSubtaskFieldErrors((prev) => ({ ...prev, name: false }));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        setSubtaskTouched((prev) => ({ ...prev, name: true }));
+                                                        setSubtaskFieldErrors((prev) => ({ ...prev, name: !taskName.trim() }));
+                                                    }}
+                                                    placeholder="Nombre de la subtarea"
+                                                    className={subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim()) ? 'p-invalid' : ''}
+                                                />
+                                                {(subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim())) && (
+                                                    <small className="p-error">El nombre es obligatorio.</small>
+                                                )}
                                             </div>
 
+                                            {/* Descripción */}
                                             <div className="flex flex-column gap-2">
                                                 <label htmlFor="taskDescription" className="font-semibold">
                                                     Descripción
@@ -740,21 +791,65 @@ const ActivitiesPage = () => {
                                                 />
                                             </div>
 
+                                            {/* Fecha objetivo */}
                                             <div className="flex flex-column gap-2">
                                                 <label htmlFor="targetDate" className="font-semibold">
-                                                    Fecha objetivo
+                                                    Fecha objetivo *
                                                 </label>
-                                                <InputText id="targetDate" type="datetime-local" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+                                                <InputText
+                                                    id="targetDate"
+                                                    type="datetime-local"
+                                                    value={targetDate}
+                                                    onChange={(e) => {
+                                                        setTargetDate(e.target.value);
+                                                        if (e.target.value) {
+                                                            setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: false }));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        setSubtaskTouched((prev) => ({ ...prev, targetDate: true }));
+                                                        setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: !targetDate }));
+                                                    }}
+                                                    className={subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate) ? 'p-invalid' : ''}
+                                                />
+                                                {(subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate)) && (
+                                                    <small className="p-error">La fecha objetivo es obligatoria.</small>
+                                                )}
                                             </div>
 
+                                            {/* Tiempo estimado */}
                                             <div className="flex flex-column gap-2">
                                                 <label htmlFor="estimatedTime" className="font-semibold">
-                                                    Tiempo estimado
+                                                    Tiempo estimado *
                                                 </label>
-                                                <InputText id="estimatedTime" type="number" min={1} value={estimatedTime} onChange={(e) => setEstimatedTime(e.target.value)} placeholder="Ejemplo: 120" />
+                                                <InputText
+                                                    id="estimatedTime"
+                                                    type="number"
+                                                    min={1}
+                                                    value={estimatedTime}
+                                                    onChange={(e) => {
+                                                        setEstimatedTime(e.target.value);
+                                                        if (e.target.value.trim()) {
+                                                            setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: false }));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        setSubtaskTouched((prev) => ({ ...prev, estimatedTime: true }));
+                                                        setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: !estimatedTime.trim() }));
+                                                    }}
+                                                    placeholder="Ejemplo: 120"
+                                                    className={subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim()) ? 'p-invalid' : ''}
+                                                />
+                                                {(subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim())) && (
+                                                    <small className="p-error">El tiempo estimado es obligatorio.</small>
+                                                )}
                                             </div>
 
-                                            {subtaskMessage && <div className="text-600 font-medium">{subtaskMessage}</div>}
+                                            {subtaskMessage && (
+                                                <div className={subtaskMessage.includes('correctamente') ? 'text-green-500 font-medium' : 'text-red-500 font-medium'}>
+                                                    {subtaskMessage}
+                                                </div>
+                                            )}
 
                                             <div className="flex justify-content-end">
                                                 <Button type="submit" label="Guardar subtarea" icon="pi pi-check" loading={subtaskLoading} disabled={subtaskLoading} />
