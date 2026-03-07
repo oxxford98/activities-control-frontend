@@ -58,8 +58,6 @@ const LoginPage = () => {
                 JwtService.saveRefreshToken(refreshToken);
             }
 
-            console.log('Login exitoso, redirigiendo a home... ', JwtService.getRefreshToken());
-
             router.push(ROUTES.HOME);
         } catch (err: any) {
             setError(err.message || 'Error al iniciar sesión');

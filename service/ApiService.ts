@@ -167,14 +167,7 @@ class ApiService {
      */
     static async refreshToken(): Promise<TokenResponse> {
         try {
-            console.log('🔄 Intentando refrescar token con JwtService.getRefreshToken()...');
-
             const refreshToken = JwtService.getRefreshToken();
-            console.log('🧪 Debug refresh cliente', {
-                hasRefreshToken: !!refreshToken,
-                refreshTokenLength: refreshToken?.length || 0,
-                refreshTokenPrefix: refreshToken ? `${refreshToken.slice(0, 12)}...` : null
-            });
             if (!refreshToken) {
                 throw new Error('No se encontró refresh token en el cliente');
             }
@@ -189,11 +182,6 @@ class ApiService {
             });
 
             const responseData = await response.json().catch(() => ({}));
-            console.log('🧪 Resultado /api/auth/refresh', {
-                status: response.status,
-                ok: response.ok,
-                body: responseData
-            });
 
             if (!response.ok) {
                 const errorMessage = responseData?.message || 'No se pudo refrescar el token';
@@ -203,25 +191,17 @@ class ApiService {
             const accessToken = responseData?.access_token || responseData?.access;
 
             if (accessToken) {
-                console.log('✅ Token refrescado exitosamente');
                 JwtService.saveToken(accessToken);
                 ApiService.updateLastActivity();
                 
                 // Verificar que se guardó correctamente
                 const savedToken = JwtService.getToken();
-                console.log('🔍 Verificación post-refresh:', {
-                    tokenRefrescado: accessToken.slice(0, 20) + '...',
-                    tokenGuardado: savedToken?.slice(0, 20) + '...',
-                    sonIguales: savedToken === accessToken,
-                    tokenExpirado: JwtService.isTokenExpired(savedToken)
-                });
                 
                 return { access: accessToken, ...responseData };
             } else {
                 throw new Error('No se recibió access_token en la respuesta');
             }
         } catch (error) {
-            console.error('❌ No se pudo refrescar el token:', error);
             JwtService.destroyToken();
             JwtService.destroyRefreshToken();
             localStorage.removeItem('lastActivity');
