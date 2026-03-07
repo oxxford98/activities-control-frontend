@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import JwtService from './service/JwtService';
 import ApiService from './service/ApiService';
+import JwtService from './service/JwtService';
 
 // Rutas públicas que no requieren autenticación
 const PUBLIC_ROUTES = ['/auth/login', '/auth/register'];
@@ -16,18 +16,6 @@ const decodeTokenPayload = (token: string): Record<string, any> | null => {
     }
 };
 
-const isTokenExpired = (token: string): boolean => {
-    try {
-        const payload = decodeTokenPayload(token);
-        if (!payload || !payload.exp) return true;
-
-        // exp is in seconds
-        const now = Math.floor(Date.now() / 1000);
-        return payload.exp < now;
-    } catch (e) {
-        return true;
-    }
-};
 
 const isValidToken = (token: string | null | undefined): boolean => {
     if (!token || token === 'undefined' || token === 'null') return false;
@@ -37,7 +25,7 @@ const isValidToken = (token: string | null | undefined): boolean => {
     if (parts.length !== 3) return false;
 
     // Validar que no esté expirado
-    return !isTokenExpired(token);
+    return !JwtService.isTokenExpired(token);
 };
 
 const debugLog = (...args: any[]) => {
@@ -62,28 +50,33 @@ export async function middleware(request: NextRequest) {
     const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname === route || pathname.startsWith(route + '/'));
 
     if (isProtectedRoute) {
-        const refreshToken = JwtService.getRefreshToken()
+        const refreshToken = request.cookies.get('refresh_token')?.value;
         const accessTokenValid = isValidToken(accessToken);
-        const hasRefreshToken = !!refreshToken;
+        const refreshTokenValid = isValidToken(refreshToken);
 
         debugLog('Ruta protegida', {
             pathname,
             hasAccessToken: !!accessToken,
             accessTokenValid,
-            hasRefreshToken
+            hasRefreshToken: !!refreshToken,
+            refreshTokenValid
         });
 
-        // Si el access token no es valido pero hay refresh token, deja pasar.
-        // El cliente (ApiService.refreshToken) se encarga del refresh real.
-        if (!accessTokenValid && hasRefreshToken) {
-            ApiService.refreshToken();
+        // Si el access token no es válido pero hay refresh token válido, 
+        // dejar pasar. El cliente (ApiService) se encargará del refresh automático.
+        if (!accessTokenValid && refreshTokenValid) {
+            debugLog('Access token inválido pero refresh token válido, dejando pasar', { pathname });
+            ApiService.refreshToken().catch((error) => {
+                debugLog('Error al refrescar token en middleware:', error);
+            });
+            return NextResponse.next();
         }
 
-        // Sin access valido y sin refresh token: redirigir a login.
-        if (!accessTokenValid) {
+        // Si no hay access token válido y tampoco hay refresh token válido, redirigir a login
+        if (!accessTokenValid && !refreshTokenValid) {
             const loginUrl = new URL('/auth/login', request.url);
             loginUrl.searchParams.set('redirect', pathname);
-            debugLog('Redirigiendo a login por falta de tokens validos', { pathname });
+            debugLog('Redirigiendo a login por falta de tokens válidos', { pathname });
             return NextResponse.redirect(loginUrl);
         }
     }

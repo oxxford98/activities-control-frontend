@@ -15,6 +15,7 @@ import JwtService from '@/service/JwtService';
 import { Toast } from 'primereact/toast';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/routes';
+import ApiService from '@/service/ApiService';
 
 
 interface ActivityItem {
@@ -134,12 +135,6 @@ const ActivitiesPage = () => {
 
     const fetchActivities = async () => {
         const token = await validateAndRefreshToken();
-        console.log('🔍 Token obtenido en fetchActivities', {
-            hasToken: !!token,
-            tokenLength: token?.length || 0,
-            tokenPrefix: token ? `${token.slice(0, 20)}...` : null,
-            isExpired: token ? JwtService.isTokenExpired(token) : null
-        });
 
         if (!token) {
             setActivitiesError('Sesion expirada. Inicia sesion nuevamente.');
@@ -159,20 +154,12 @@ const ActivitiesPage = () => {
         setActivitiesError('');
 
         try {
-            console.log(' Haciendo fetch a /activities/by-user/ con token:', {
-                tokenPrefix: token.slice(0, 20) + '...',
-                isExpired: JwtService.isTokenExpired(token)
-            });
-
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/activities/by-user/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             if (response.status === 401) {
-                console.error('❌ /activities/by-user/ devolvio 401 aun despues de validateAndRefreshToken', {
-                    tokenUsado: token.slice(0, 20) + '...',
-                    tokenExpirado: JwtService.isTokenExpired(token)
-                });
+                ApiService.refreshToken();
             }
 
             if (!response.ok) {
