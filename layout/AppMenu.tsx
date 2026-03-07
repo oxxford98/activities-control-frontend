@@ -37,8 +37,8 @@ const AppMenu = () => {
             label: 'Home',
             items: [
                 {
-                    label: 'Dashboard',
-                    icon: 'pi pi-fw pi-home',
+                    label: 'Hoy',
+                    icon: 'pi pi-calendar',
                     to: ROUTES.HOME
                 },
                 {

@@ -21,6 +21,7 @@ import ApiService from '@/service/ApiService';
 interface ActivityItem {
     id: number;
     title: string;
+    subject?: string | null;
     type_activity: string;
     user?: number;
     raw: Record<string, any>;
@@ -104,6 +105,9 @@ const ActivitiesPage = () => {
     const [subtaskFieldErrors, setSubtaskFieldErrors] = useState({ name: false, targetDate: false, estimatedTime: false });
     const [subtaskTouched, setSubtaskTouched] = useState({ name: false, targetDate: false, estimatedTime: false });
 
+    const [activityEditError, setActivityEditError] = useState('');
+    const [subActivityEditError, setSubActivityEditError] = useState('');
+
     const workPlanEndpoint = process.env.NEXT_PUBLIC_WORK_PLAN_ENDPOINT || '/sub-activities/';
     const workPlanUrl = workPlanEndpoint.startsWith('http') ? workPlanEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${workPlanEndpoint}`;
     const getSubActivityDetailUrl = (subActivityId: number) => `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${subActivityId}/`;
@@ -169,6 +173,7 @@ const ActivitiesPage = () => {
                 id: Number(item.id),
                 title: String(item.title ?? ''),
                 type_activity: String(item.type_activity ?? ''),
+                subject: item.subject ?? null,
                 user: item.user !== undefined ? Number(item.user) : undefined,
                 raw: item
             }));
@@ -337,6 +342,7 @@ const ActivitiesPage = () => {
             grade: raw.grade ?? null,
             user: raw.user ?? activity.user
         });
+        setActivityEditError('');  
         setActivityEditDialogVisible(true);
     };
 
@@ -351,7 +357,7 @@ const ActivitiesPage = () => {
         }
 
         if (!editingActivity.title.trim() || !editingActivity.type_activity.trim() || !String(editingActivity.subject || '').trim()) {
-            setActionError('Título, tipo de actividad y materia son obligatorios.');
+            setActivityEditError('Título, tipo de actividad y materia son obligatorios.');
             return;
         }
 
@@ -380,6 +386,7 @@ const ActivitiesPage = () => {
             }
 
             setActivityEditDialogVisible(false);
+            setActivityEditError('');
             setActionError('');
             setActivitySuccessMessage(getSuccessMessageWithDate('La actividad se ha modificado exitosamente'));
             setSuccessDialogVisible(true);
@@ -388,7 +395,7 @@ const ActivitiesPage = () => {
                 fetchActivityDetail(editingActivity.id);
             }
         } catch (error: any) {
-            setActionError(error.message || 'Error al editar actividad.');
+            setActivityEditError(error.message || 'Error al editar actividad.');
         }
     };
 
@@ -461,6 +468,7 @@ const ActivitiesPage = () => {
 
     const openEditSubActivity = (subActivity: SubActivityItem) => {
         setEditingSubActivity({ ...subActivity });
+        setSubActivityEditError('');  // ← limpia error al abrir
         setSubActivityEditDialogVisible(true);
     };
 
@@ -475,19 +483,19 @@ const ActivitiesPage = () => {
         }
 
         if (!String(editingSubActivity.name || '').trim()) {
-            setActionError('El nombre de la subtarea es obligatorio.');
+            setSubActivityEditError('El nombre de la subtarea es obligatorio.');
             return;
         }
 
         const estimated = Number.parseInt(String(editingSubActivity.estimated_time ?? ''), 10);
         if (Number.isNaN(estimated) || estimated < 1) {
-            setActionError('El tiempo estimado debe ser un entero mayor o igual a 1.');
+            setSubActivityEditError('El tiempo estimado debe ser un entero mayor o igual a 1.');
             return;
         }
 
         const targetDateIso = toIsoOrNull(String(editingSubActivity.target_date || ''));
         if (!targetDateIso) {
-            setActionError('La fecha objetivo es obligatoria y válida.');
+            setSubActivityEditError('La fecha objetivo es obligatoria y válida.');
             return;
         }
 
@@ -513,14 +521,14 @@ const ActivitiesPage = () => {
             }
 
             setSubActivityEditDialogVisible(false);
-            setActionError('');
+            setSubActivityEditError('');
             setActivitySuccessMessage(getSuccessMessageWithDate('La subtarea se ha modificado exitosamente'));
             setSuccessDialogVisible(true);
             if (selectedActivity?.id) {
                 fetchSubActivitiesByActivity(selectedActivity.id);
             }
         } catch (error: any) {
-            setActionError(error.message || 'Error al editar subtarea.');
+            setSubActivityEditError(error.message || 'Error al editar subtarea.');
         }
     };
 
@@ -556,11 +564,11 @@ const ActivitiesPage = () => {
             if (selectedActivity?.id) {
                 fetchSubActivitiesByActivity(selectedActivity.id);
             }
-            setActionError('');
+            setActionError('');  
             setActivitySuccessMessage(getSuccessMessageWithDate('La subtarea se eliminó exitosamente'));
             setSuccessDialogVisible(true);
         } catch (error: any) {
-            setActionError(error.message || 'Error al eliminar subtarea.');
+            setActionError(error.message || 'Error al eliminar subtarea.');  
         }
     };
 
@@ -741,10 +749,11 @@ const ActivitiesPage = () => {
                         >
                             <Column header="ID" body={(_, { rowIndex }) => rowIndex + 1} />
                             <Column field="title" header="Título" body={titleTemplate} />
+                            <Column field="subject" header="Materia" body={(rowData: ActivityItem) => rowData.subject || '-'} />
                             <Column field="type_activity" header="Tipo de actividad" />
-                            <Column header="Acciones" body={activityActionsTemplate} />
                             <Column field="fecha" header="Fecha del evento" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.event_date)} />
                             <Column field="fecha_limite" header="Fecha límite" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.deadline)} />
+                            <Column header="Acciones" body={activityActionsTemplate} />
                         </DataTable>
                     </div>
 
@@ -835,12 +844,10 @@ const ActivitiesPage = () => {
 
                                 {showWorkPlanForm && (
                                     <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
-                                        {/* Nombre */}
                                         <div className="flex flex-column gap-2">
                                             <label htmlFor="taskName" className="font-semibold">
                                                 Nombre *
                                             </label>
-
                                             <InputText
                                                 id="taskName"
                                                 value={taskName}
@@ -849,12 +856,10 @@ const ActivitiesPage = () => {
                                             />
                                         </div>
 
-                                        {/* Descripción */}
                                         <div className="flex flex-column gap-2">
                                             <label htmlFor="taskDescription" className="font-semibold">
                                                 Descripción
                                             </label>
-
                                             <InputTextarea
                                                 id="taskDescription"
                                                 value={taskDescription}
@@ -863,12 +868,10 @@ const ActivitiesPage = () => {
                                             />
                                         </div>
 
-                                        {/* Fecha */}
                                         <div className="flex flex-column gap-2">
                                             <label htmlFor="targetDate" className="font-semibold">
                                                 Fecha objetivo *
                                             </label>
-
                                             <InputText
                                                 id="targetDate"
                                                 type="datetime-local"
@@ -877,12 +880,10 @@ const ActivitiesPage = () => {
                                             />
                                         </div>
 
-                                        {/* Tiempo estimado */}
                                         <div className="flex flex-column gap-2">
                                             <label htmlFor="estimatedTime" className="font-semibold">
                                                 Tiempo estimado *
                                             </label>
-
                                             <InputText
                                                 id="estimatedTime"
                                                 type="number"
@@ -927,13 +928,18 @@ const ActivitiesPage = () => {
                 <Dialog
                     header="Editar actividad"
                     visible={activityEditDialogVisible}
-                    onHide={() => setActivityEditDialogVisible(false)}
+                    onHide={() => { setActivityEditDialogVisible(false); setActivityEditError(''); }}
                     style={{ width: '40rem', maxWidth: '95vw' }}
                     modal
                     draggable={false}
                 >
                     {editingActivity && (
                         <form className="flex flex-column gap-3" onSubmit={handleSaveActivityEdit}>
+                            {/* error dentro del dialog */}
+                            {activityEditError && (
+                                <div className="text-red-500 font-medium mb-2">{activityEditError}</div>
+                            )}
+
                             <div className="flex flex-column gap-2">
                                 <label htmlFor="editActivityTitle" className="font-semibold">Título</label>
                                 <InputText id="editActivityTitle" value={editingActivity.title} onChange={(e) => setEditingActivity((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
@@ -976,7 +982,7 @@ const ActivitiesPage = () => {
                             </div>
 
                             <div className="flex justify-content-end gap-2">
-                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => setActivityEditDialogVisible(false)} />
+                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setActivityEditDialogVisible(false); setActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
                             </div>
                         </form>
@@ -986,13 +992,18 @@ const ActivitiesPage = () => {
                 <Dialog
                     header="Editar subtarea"
                     visible={subActivityEditDialogVisible}
-                    onHide={() => setSubActivityEditDialogVisible(false)}
+                    onHide={() => { setSubActivityEditDialogVisible(false); setSubActivityEditError(''); }}
                     style={{ width: '36rem', maxWidth: '95vw' }}
                     modal
                     draggable={false}
                 >
                     {editingSubActivity && (
                         <form className="flex flex-column gap-3" onSubmit={handleSaveSubActivityEdit}>
+                            {/*  error dentro del dialog */}
+                            {subActivityEditError && (
+                                <div className="text-red-500 font-medium mb-2">{subActivityEditError}</div>
+                            )}
+
                             <div className="flex flex-column gap-2">
                                 <label htmlFor="editSubActivityName" className="font-semibold">Nombre</label>
                                 <InputText id="editSubActivityName" value={String(editingSubActivity.name || '')} onChange={(e) => setEditingSubActivity((prev) => (prev ? { ...prev, name: e.target.value } : prev))} />
@@ -1014,7 +1025,7 @@ const ActivitiesPage = () => {
                             </div>
 
                             <div className="flex justify-content-end gap-2">
-                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => setSubActivityEditDialogVisible(false)} />
+                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setSubActivityEditDialogVisible(false); setSubActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
                             </div>
                         </form>
