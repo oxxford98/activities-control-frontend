@@ -11,6 +11,7 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { decodeSessionTokenPayload, getSessionToken, validateAndRefreshToken } from '@/lib/sessionUser';
+import JwtService from '@/service/JwtService';
 import { Toast } from 'primereact/toast';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/routes';
@@ -128,47 +129,63 @@ const ActivitiesPage = () => {
     };
 
     const fetchActivities = async () => {
-        const token = getSessionToken();
-        if (!token) return;
+        const token = await validateAndRefreshToken();
+        console.log('🔍 Token obtenido en fetchActivities', {
+            hasToken: !!token,
+            tokenLength: token?.length || 0,
+            tokenPrefix: token ? `${token.slice(0, 20)}...` : null,
+            isExpired: token ? JwtService.isTokenExpired(token) : null
+        });
+
+        if (!token) {
+            setActivitiesError('Sesion expirada. Inicia sesion nuevamente.');
+            router.replace(ROUTES.AUTH.LOGIN);
+            return;
+        }
 
         const tokenPayload = (token ? decodeSessionTokenPayload(token) : null) as TokenPayload | null;
+        const payloadUserId = Number.parseInt(String(tokenPayload?.user_id ?? tokenPayload?.id ?? tokenPayload?.sub), 10);
+
+        if (Number.isNaN(payloadUserId)) {
+            setActivitiesError('No se pudo identificar el usuario del token.');
+            return;
+        }
 
         setActivitiesLoading(true);
         setActivitiesError('');
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/activities/`, {
+            console.log('📤 Haciendo fetch a /activities/by-user/ con token:', {
+                tokenPrefix: token.slice(0, 20) + '...',
+                isExpired: JwtService.isTokenExpired(token)
+            });
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/activities/by-user/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
+            if (response.status === 401) {
+                console.error('❌ /activities/by-user/ devolvio 401 aun despues de validateAndRefreshToken', {
+                    tokenUsado: token.slice(0, 20) + '...',
+                    tokenExpirado: JwtService.isTokenExpired(token)
+                });
+            }
 
             if (!response.ok) {
                 throw new Error('No se pudieron cargar las actividades.');
             }
 
             const data = await response.json();
-            console.log('Respuesta cruda /activities/:', data);
-
             const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
-            console.table(list);
 
-            const payloadUserId = Number.parseInt(String(tokenPayload?.user_id ?? tokenPayload?.id ?? tokenPayload?.sub), 10);
-            const hasPayloadUserId = !Number.isNaN(payloadUserId);
+            const formatted: ActivityItem[] = list.map((item: any) => ({
+                id: Number(item.id),
+                title: String(item.title ?? ''),
+                type_activity: String(item.type_activity ?? ''),
+                user: item.user !== undefined ? Number(item.user) : undefined,
+                raw: item
+            }));
 
-            const formatted: ActivityItem[] = list
-                .filter((item: any) => {
-                    if (!hasPayloadUserId) return true;
-                    if (item?.user === undefined || item?.user === null) return true;
-                    return Number(item.user) === payloadUserId;
-                })
-                .map((item: any) => ({
-                    id: Number(item.id),
-                    title: String(item.title ?? ''),
-                    type_activity: String(item.type_activity ?? ''),
-                    user: item.user !== undefined ? Number(item.user) : undefined,
-                    raw: item
-                }));
-
-            console.table(formatted);
             setActivities(formatted);
         } catch (error: any) {
             setActivitiesError(error.message || 'Error al cargar actividades.');
@@ -735,7 +752,7 @@ const ActivitiesPage = () => {
                             dataKey="id"
                             metaKeySelection={false}
                         >
-                            <Column field="id" header="ID" />
+                            <Column header="ID" body={(_, { rowIndex }) => rowIndex + 1} />
                             <Column field="title" header="Título" body={titleTemplate} />
                             <Column field="type_activity" header="Tipo de actividad" />
                             <Column header="Acciones" body={activityActionsTemplate} />

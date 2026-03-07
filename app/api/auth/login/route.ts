@@ -42,7 +42,10 @@ export async function POST(request: NextRequest) {
         const res = NextResponse.json({
             message: 'Login exitoso',
             user: userData,
-            access_token: accessToken
+            access: accessToken,
+            access_token: accessToken,
+            refresh: refreshToken,
+            refresh_token: refreshToken
         });
 
         // Cookie para access token (httpOnly, secure, 1 hora)

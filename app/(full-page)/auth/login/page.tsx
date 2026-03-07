@@ -41,7 +41,8 @@ const LoginPage = () => {
 
             const data = await response.json();
             const userData = data?.user;
-            const token = data?.access_token;
+            const token = data?.access || data?.access_token;
+            const refreshToken = data?.refresh || data?.refresh_token;
 
             // Guardar usuario y token en localStorage para acceso rápido en el cliente
             if (userData) {
@@ -52,6 +53,12 @@ const LoginPage = () => {
             if (token) {
                 JwtService.saveToken(token);
             }
+
+            if (refreshToken) {
+                JwtService.saveRefreshToken(refreshToken);
+            }
+
+            console.log('Login exitoso, redirigiendo a home... ', JwtService.getRefreshToken());
 
             router.push(ROUTES.HOME);
         } catch (err: any) {

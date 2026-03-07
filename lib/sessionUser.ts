@@ -103,7 +103,6 @@ export const validateAndRefreshToken = async (): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
 
     const currentToken = getSessionToken();
-    if (!currentToken) return null;
 
     // Si el token no está expirado, devolver el actual
     if (!JwtService.isTokenExpired(currentToken)) {

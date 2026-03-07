@@ -134,7 +134,6 @@ const CrearPage = () => {
     const [descripcion, setDescripcion] = useState('');
     const [eventDate, setEventDate] = useState('');
     const [deadline, setDeadline] = useState('');
-    const [grade, setGrade] = useState('');
     const [displayName, setDisplayName] = useState('usuario');
     const [loggedUserId, setLoggedUserId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
@@ -243,14 +242,9 @@ const CrearPage = () => {
             subject: subject.trim(),
             event_date: toIsoOrNull(eventDate),
             deadline: toIsoOrNull(deadline),
-            grade: grade.trim() ? Number.parseFloat(grade) : null,
+            grade: null,
             user: loggedUserId
         };
-
-        if (payload.grade !== null && Number.isNaN(payload.grade)) {
-            setError('La nota debe ser un número válido.');
-            return;
-        }
 
         setLoading(true);
 
@@ -301,7 +295,6 @@ const CrearPage = () => {
             setDescripcion('');
             setEventDate('');
             setDeadline('');
-            setGrade('');
             setSubActivities([]);
 
             setTimeout(() => {
