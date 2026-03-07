@@ -28,7 +28,7 @@ const LoginPage = () => {
         setError('');
         setLoading(true);
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+            const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -40,24 +40,17 @@ const LoginPage = () => {
             }
 
             const data = await response.json();
-            const accessToken = data?.access || data?.access_token || data?.token?.access;
-            const refreshToken = data?.refresh || data?.refresh_token;
             const userData = data?.user;
+            const token = data?.access_token;
 
-            if (!accessToken) {
-                throw new Error('Respuesta de login sin token de acceso');
-            }
-
-            localStorage.setItem('access_token', accessToken);
-            JwtService.saveToken(accessToken);
-
-            if (refreshToken) {
-                JwtService.saveRefreshToken(refreshToken);
-            }
-
+            // Guardar usuario y token en localStorage para acceso rápido en el cliente
             if (userData) {
                 localStorage.setItem('user', JSON.stringify(userData));
-                useAuthStore.getState().setAuth({ user: userData, access: accessToken });
+                useAuthStore.getState().setAuth({ user: userData, access: 'authenticated' });
+            }
+            
+            if (token) {
+                JwtService.saveToken(token);
             }
 
             router.push(ROUTES.HOME);

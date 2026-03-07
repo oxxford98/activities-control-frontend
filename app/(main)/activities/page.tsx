@@ -10,9 +10,10 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
-import { decodeSessionTokenPayload, getSessionToken } from '@/lib/sessionUser';
+import { decodeSessionTokenPayload, getSessionToken, validateAndRefreshToken } from '@/lib/sessionUser';
 import { Toast } from 'primereact/toast';
 import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/lib/routes';
 
 
 interface ActivityItem {
@@ -281,6 +282,17 @@ const ActivitiesPage = () => {
             window.removeEventListener('activity-created', refreshHandler);
         };
     }, []);
+
+    useEffect(() => {
+        const validateTokenOnMount = async () => {
+            const validToken = await validateAndRefreshToken();
+            if (!validToken) {
+                router.replace(ROUTES.AUTH.LOGIN);
+            }
+        };
+
+        validateTokenOnMount();
+    }, [router]);
 
     const openActivityDetails = (activity: ActivityItem) => {
         setSelectedActivity(activity);
