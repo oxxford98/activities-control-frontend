@@ -295,9 +295,12 @@ const Dashboard = () => {
             <div className="flex flex-column gap-4">
                 <div className="surface-ground border-round-lg p-3 md:p-4">
                     <div className="text-2xl font-bold text-900">{`Hola ${displayName}`}</div>
-                    <div className="text-600 mt-2">
-                        Organiza tus subtareas en <strong>Vencidas</strong>, <strong>Para hoy</strong> y <strong>Proximas ({NEXT_DAYS_WINDOW} dias)</strong>.
-                    </div>
+                    <ul className="text-600 mt-2 line-height-3 pl-3" style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0 0 0' }}>
+                        <li><strong>🔴 Vencidas:</strong> subtareas cuya fecha límite ya expiró.</li>
+                        <li><strong>🟢 Para hoy:</strong> subtareas que vencen en lo que resta del día.</li>
+                        <li><strong>🔵 Próximas ({NEXT_DAYS_WINDOW} días):</strong> subtareas con fecha en los próximos {NEXT_DAYS_WINDOW} días.</li>
+                        <li className="mt-2 text-500 text-sm"><i className="pi pi-sort-amount-down mr-1" />Ordenadas de la más urgente a la más lejana; ante empate en fecha, primero la de mayor carga estimada.</li>
+                    </ul>
                     <div className="flex flex-wrap gap-2 mt-3">
                         <span className="px-2 py-1 border-round font-medium text-sm surface-card shadow-1">Total: {totalItems}</span>
                         <span className="px-2 py-1 border-round font-medium text-sm surface-card shadow-1">Vencidas: {groupedItems.overdue.length}</span>
@@ -393,8 +396,9 @@ const Dashboard = () => {
                                 header="Subtarea"
                                 body={(rowData: TodayActivityItem) => <span style={{ color: '#B91C1C', fontWeight: 600 }}>{taskTitle(rowData)}</span>}
                             />
-                            <Column field="estimated_time" header="Esfuerzo" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
-                            <Column header="Fecha" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
+                            <Column field="activity_name" header="Actividad" body={(rowData: TodayActivityItem) => rowData.activity_name ?? '-'} />
+                            <Column field="estimated_time" header="Esfuerzo (minutos)" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
+                            <Column header="Fecha límite" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
                         </DataTable>
                     </div>
 
@@ -424,8 +428,9 @@ const Dashboard = () => {
                                 header="Subtarea"
                                 body={(rowData: TodayActivityItem) => <span style={{ color: '#166534', fontWeight: 600 }}>{taskTitle(rowData)}</span>}
                             />
-                            <Column field="estimated_time" header="Esfuerzo" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
-                            <Column header="Fecha" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
+                            <Column field="activity_name" header="Actividad" body={(rowData: TodayActivityItem) => rowData.activity_name ?? '-'} />
+                            <Column field="estimated_time" header="Esfuerzo (minutos)" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
+                            <Column header="Fecha límite" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
                         </DataTable>
                     </div>
 
@@ -455,8 +460,9 @@ const Dashboard = () => {
                                 header="Subtarea"
                                 body={(rowData: TodayActivityItem) => <span style={{ color: '#1D4ED8', fontWeight: 600 }}>{taskTitle(rowData)}</span>}
                             />
-                            <Column field="estimated_time" header="Esfuerzo" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
-                            <Column header="Fecha" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
+                            <Column field="activity_name" header="Actividad" body={(rowData: TodayActivityItem) => rowData.activity_name ?? '-'} />
+                            <Column field="estimated_time" header="Esfuerzo (minutos)" body={(rowData: TodayActivityItem) => rowData.estimated_time ?? '-'} />
+                            <Column header="Fecha límite" body={(rowData: TodayActivityItem) => formatDateTime(rowData.target_date || rowData.deadline || rowData.event_date)} />
                         </DataTable>
                     </div>
                 </div>

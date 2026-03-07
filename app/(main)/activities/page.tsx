@@ -155,7 +155,7 @@ const ActivitiesPage = () => {
         setActivitiesError('');
 
         try {
-            console.log('📤 Haciendo fetch a /activities/by-user/ con token:', {
+            console.log(' Haciendo fetch a /activities/by-user/ con token:', {
                 tokenPrefix: token.slice(0, 20) + '...',
                 isExpired: JwtService.isTokenExpired(token)
             });
@@ -755,9 +755,9 @@ const ActivitiesPage = () => {
                             <Column header="ID" body={(_, { rowIndex }) => rowIndex + 1} />
                             <Column field="title" header="Título" body={titleTemplate} />
                             <Column field="type_activity" header="Tipo de actividad" />
-                            <Column header="Acciones" body={activityActionsTemplate} />
                             <Column field="fecha" header="Fecha del evento" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.event_date)} />
                             <Column field="fecha_limite" header="Fecha límite" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.deadline)} />
+                            <Column header="Acciones" body={activityActionsTemplate} />
                         </DataTable>
                     </div>
 
