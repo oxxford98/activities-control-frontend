@@ -172,7 +172,7 @@ class ApiService {
                 throw new Error('No se encontró refresh token en el cliente');
             }
 
-            const response = await fetch('/api/auth/refresh', {
+            const response = await fetch('/api/auth/token/refresh', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -196,7 +196,6 @@ class ApiService {
                 
                 // Verificar que se guardó correctamente
                 const savedToken = JwtService.getToken();
-                
                 return { access: accessToken, ...responseData };
             } else {
                 throw new Error('No se recibió access_token en la respuesta');
