@@ -28,7 +28,7 @@ const LoginPage = () => {
         setError('');
         setLoading(true);
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+            const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -40,24 +40,22 @@ const LoginPage = () => {
             }
 
             const data = await response.json();
-            const accessToken = data?.access || data?.access_token || data?.token?.access;
-            const refreshToken = data?.refresh || data?.refresh_token;
             const userData = data?.user;
+            const token = data?.access || data?.access_token;
+            const refreshToken = data?.refresh || data?.refresh_token;
 
-            if (!accessToken) {
-                throw new Error('Respuesta de login sin token de acceso');
+            // Guardar usuario y token en localStorage para acceso rápido en el cliente
+            if (userData) {
+                localStorage.setItem('user', JSON.stringify(userData));
+                useAuthStore.getState().setAuth({ user: userData, access: 'authenticated' });
             }
-
-            localStorage.setItem('access_token', accessToken);
-            JwtService.saveToken(accessToken);
+            
+            if (token) {
+                JwtService.saveToken(token);
+            }
 
             if (refreshToken) {
                 JwtService.saveRefreshToken(refreshToken);
-            }
-
-            if (userData) {
-                localStorage.setItem('user', JSON.stringify(userData));
-                useAuthStore.getState().setAuth({ user: userData, access: accessToken });
             }
 
             router.push(ROUTES.HOME);
@@ -89,12 +87,12 @@ const LoginPage = () => {
                             <label htmlFor="email1" className="block text-900 text-xl font-medium mb-2">
                                 Correo
                             </label>
-                            <InputText id="email1" type="email" placeholder="Correo" className="w-full md:w-30rem mb-5" style={{ padding: '1rem' }} value={email} onChange={(e) => setEmail(e.target.value)} />
+                            <InputText id="email1" type="email" placeholder="Correo" className="w-full md:w-30rem mb-5" style={{ padding: '1rem' }} value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
 
                             <label htmlFor="password1" className="block text-900 font-medium text-xl mb-2">
                                 Contraseña
                             </label>
-                            <Password inputId="password1" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" toggleMask feedback={false} className="w-full mb-5" inputClassName="w-full p-3 md:w-30rem"></Password>
+                            <Password inputId="password1" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="Contraseña" toggleMask feedback={false} className="w-full mb-5" inputClassName="w-full p-3 md:w-30rem"></Password>
 
                             {error && <div className="text-red-500 mb-5 text-center font-medium">{error}</div>}
 

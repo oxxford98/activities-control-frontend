@@ -53,7 +53,10 @@ const RegisterPage = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    username: firstName.toLowerCase() + lastName.toLowerCase(),
+                    username: (
+                        firstName.replace(/\s+/g, '').toLowerCase() +
+                        lastName.replace(/\s+/g, '').toLowerCase()
+                    ),
                     first_name: firstName,
                     last_name: lastName,
                     email,

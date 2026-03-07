@@ -14,7 +14,15 @@ const AppMenu = () => {
     const { layoutConfig } = useContext(LayoutContext);
     const router = useRouter();
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        // Llamar al endpoint de logout para limpiar cookies httpOnly
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Error al cerrar sesión:', error);
+        }
+        
+        // Limpiar estado local
         useAuthStore.getState().purgeAuth();
         JwtService.destroyToken();
         JwtService.destroyRefreshToken();
@@ -29,8 +37,8 @@ const AppMenu = () => {
             label: 'Home',
             items: [
                 {
-                    label: 'Dashboard',
-                    icon: 'pi pi-fw pi-home',
+                    label: 'Hoy',
+                    icon: 'pi pi-calendar',
                     to: ROUTES.HOME
                 },
                 {

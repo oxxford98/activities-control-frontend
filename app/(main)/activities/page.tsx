@@ -10,13 +10,18 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
-import { decodeSessionTokenPayload, getSessionToken } from '@/lib/sessionUser';
+import { decodeSessionTokenPayload, getSessionToken, validateAndRefreshToken } from '@/lib/sessionUser';
+import JwtService from '@/service/JwtService';
 import { Toast } from 'primereact/toast';
+import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/lib/routes';
+import ApiService from '@/service/ApiService';
 
 
 interface ActivityItem {
     id: number;
     title: string;
+    subject?: string | null;
     type_activity: string;
     user?: number;
     raw: Record<string, any>;
@@ -60,6 +65,7 @@ const ACTIVITY_TYPE_OPTIONS = [
 ];
 
 const ActivitiesPage = () => {
+    const router = useRouter();
     const toastRef = useRef<Toast>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [activitiesLoading, setActivitiesLoading] = useState(false);
@@ -69,6 +75,7 @@ const ActivitiesPage = () => {
     const [actionError, setActionError] = useState('');
 
     const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
+    const [showActivityModal, setShowActivityModal] = useState(false);
     const [selectedActivityDetail, setSelectedActivityDetail] = useState<ActivityDetail | null>(null);
     const [activityDetailLoading, setActivityDetailLoading] = useState(false);
     const [activityDetailError, setActivityDetailError] = useState('');
@@ -98,6 +105,9 @@ const ActivitiesPage = () => {
     const [subtaskFieldErrors, setSubtaskFieldErrors] = useState({ name: false, targetDate: false, estimatedTime: false });
     const [subtaskTouched, setSubtaskTouched] = useState({ name: false, targetDate: false, estimatedTime: false });
 
+    const [activityEditError, setActivityEditError] = useState('');
+    const [subActivityEditError, setSubActivityEditError] = useState('');
+
     const workPlanEndpoint = process.env.NEXT_PUBLIC_WORK_PLAN_ENDPOINT || '/sub-activities/';
     const workPlanUrl = workPlanEndpoint.startsWith('http') ? workPlanEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${workPlanEndpoint}`;
     const getSubActivityDetailUrl = (subActivityId: number) => `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${subActivityId}/`;
@@ -124,18 +134,33 @@ const ActivitiesPage = () => {
     };
 
     const fetchActivities = async () => {
-        const token = getSessionToken();
-        if (!token) return;
+        const token = await validateAndRefreshToken();
+
+        if (!token) {
+            setActivitiesError('Sesion expirada. Inicia sesion nuevamente.');
+            router.replace(ROUTES.AUTH.LOGIN);
+            return;
+        }
 
         const tokenPayload = (token ? decodeSessionTokenPayload(token) : null) as TokenPayload | null;
+        const payloadUserId = Number.parseInt(String(tokenPayload?.user_id ?? tokenPayload?.id ?? tokenPayload?.sub), 10);
+
+        if (Number.isNaN(payloadUserId)) {
+            setActivitiesError('No se pudo identificar el usuario del token.');
+            return;
+        }
 
         setActivitiesLoading(true);
         setActivitiesError('');
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/activities/`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/activities/by-user/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
+            if (response.status === 401) {
+                ApiService.refreshToken();
+            }
 
             if (!response.ok) {
                 throw new Error('No se pudieron cargar las actividades.');
@@ -144,22 +169,14 @@ const ActivitiesPage = () => {
             const data = await response.json();
             const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
 
-            const payloadUserId = Number.parseInt(String(tokenPayload?.user_id ?? tokenPayload?.id ?? tokenPayload?.sub), 10);
-            const hasPayloadUserId = !Number.isNaN(payloadUserId);
-
-            const formatted: ActivityItem[] = list
-                .filter((item: any) => {
-                    if (!hasPayloadUserId) return true;
-                    if (item?.user === undefined || item?.user === null) return true;
-                    return Number(item.user) === payloadUserId;
-                })
-                .map((item: any) => ({
-                    id: Number(item.id),
-                    title: String(item.title ?? ''),
-                    type_activity: String(item.type_activity ?? ''),
-                    user: item.user !== undefined ? Number(item.user) : undefined,
-                    raw: item
-                }));
+            const formatted: ActivityItem[] = list.map((item: any) => ({
+                id: Number(item.id),
+                title: String(item.title ?? ''),
+                type_activity: String(item.type_activity ?? ''),
+                subject: item.subject ?? null,
+                user: item.user !== undefined ? Number(item.user) : undefined,
+                raw: item
+            }));
 
             setActivities(formatted);
         } catch (error: any) {
@@ -275,8 +292,20 @@ const ActivitiesPage = () => {
         };
     }, []);
 
+    useEffect(() => {
+        const validateTokenOnMount = async () => {
+            const validToken = await validateAndRefreshToken();
+            if (!validToken) {
+                router.replace(ROUTES.AUTH.LOGIN);
+            }
+        };
+
+        validateTokenOnMount();
+    }, [router]);
+
     const openActivityDetails = (activity: ActivityItem) => {
         setSelectedActivity(activity);
+        setShowActivityModal(true);
         setSelectedActivityDetail(null);
         setActivityDetailError('');
         setShowWorkPlanForm(false);
@@ -313,6 +342,7 @@ const ActivitiesPage = () => {
             grade: raw.grade ?? null,
             user: raw.user ?? activity.user
         });
+        setActivityEditError('');  
         setActivityEditDialogVisible(true);
     };
 
@@ -327,7 +357,7 @@ const ActivitiesPage = () => {
         }
 
         if (!editingActivity.title.trim() || !editingActivity.type_activity.trim() || !String(editingActivity.subject || '').trim()) {
-            setActionError('Título, tipo de actividad y materia son obligatorios.');
+            setActivityEditError('Título, tipo de actividad y materia son obligatorios.');
             return;
         }
 
@@ -356,6 +386,7 @@ const ActivitiesPage = () => {
             }
 
             setActivityEditDialogVisible(false);
+            setActivityEditError('');
             setActionError('');
             setActivitySuccessMessage(getSuccessMessageWithDate('La actividad se ha modificado exitosamente'));
             setSuccessDialogVisible(true);
@@ -364,7 +395,7 @@ const ActivitiesPage = () => {
                 fetchActivityDetail(editingActivity.id);
             }
         } catch (error: any) {
-            setActionError(error.message || 'Error al editar actividad.');
+            setActivityEditError(error.message || 'Error al editar actividad.');
         }
     };
 
@@ -437,6 +468,7 @@ const ActivitiesPage = () => {
 
     const openEditSubActivity = (subActivity: SubActivityItem) => {
         setEditingSubActivity({ ...subActivity });
+        setSubActivityEditError('');  // ← limpia error al abrir
         setSubActivityEditDialogVisible(true);
     };
 
@@ -451,19 +483,19 @@ const ActivitiesPage = () => {
         }
 
         if (!String(editingSubActivity.name || '').trim()) {
-            setActionError('El nombre de la subtarea es obligatorio.');
+            setSubActivityEditError('El nombre de la subtarea es obligatorio.');
             return;
         }
 
         const estimated = Number.parseInt(String(editingSubActivity.estimated_time ?? ''), 10);
         if (Number.isNaN(estimated) || estimated < 1) {
-            setActionError('El tiempo estimado debe ser un entero mayor o igual a 1.');
+            setSubActivityEditError('El tiempo estimado debe ser un entero mayor o igual a 1.');
             return;
         }
 
         const targetDateIso = toIsoOrNull(String(editingSubActivity.target_date || ''));
         if (!targetDateIso) {
-            setActionError('La fecha objetivo es obligatoria y válida.');
+            setSubActivityEditError('La fecha objetivo es obligatoria y válida.');
             return;
         }
 
@@ -489,14 +521,14 @@ const ActivitiesPage = () => {
             }
 
             setSubActivityEditDialogVisible(false);
-            setActionError('');
+            setSubActivityEditError('');
             setActivitySuccessMessage(getSuccessMessageWithDate('La subtarea se ha modificado exitosamente'));
             setSuccessDialogVisible(true);
             if (selectedActivity?.id) {
                 fetchSubActivitiesByActivity(selectedActivity.id);
             }
         } catch (error: any) {
-            setActionError(error.message || 'Error al editar subtarea.');
+            setSubActivityEditError(error.message || 'Error al editar subtarea.');
         }
     };
 
@@ -532,11 +564,11 @@ const ActivitiesPage = () => {
             if (selectedActivity?.id) {
                 fetchSubActivitiesByActivity(selectedActivity.id);
             }
-            setActionError('');
+            setActionError('');  
             setActivitySuccessMessage(getSuccessMessageWithDate('La subtarea se eliminó exitosamente'));
             setSuccessDialogVisible(true);
         } catch (error: any) {
-            setActionError(error.message || 'Error al eliminar subtarea.');
+            setActionError(error.message || 'Error al eliminar subtarea.');  
         }
     };
 
@@ -685,181 +717,196 @@ const ActivitiesPage = () => {
             <Toast ref={toastRef} />
             <div className="flex flex-column gap-4">
                 <div className="flex justify-content-end">
-                    <Button label="Crear actividad" icon="pi pi-plus" onClick={handleOpenCreateDialog} />
+                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => router.push('/activities/crear')} />
                 </div>
 
                 {activitiesError && <div className="text-red-500 font-medium">{activitiesError}</div>}
                 {actionError && <div className="text-red-500 font-medium">{actionError}</div>}
 
                 <div className="grid">
-                    <div className="col-12 lg:col-7">
-                        <DataTable value={activities} loading={activitiesLoading} emptyMessage="No hay actividades registradas.">
-                            <Column field="id" header="ID" />
+                    <div className="col-12 ">
+                        <DataTable
+                            value={activities}
+                            loading={activitiesLoading}
+                            emptyMessage="No hay actividades registradas."
+                            selectionMode="single"
+                            selection={selectedActivity}
+                            onSelectionChange={(e) => {
+                                const activity = e.value as ActivityItem | null;
+
+                                if (activity) {
+                                    openActivityDetails(activity);
+                                    return;
+                                }
+
+                                setSelectedActivity(null);
+                                setSelectedActivityDetail(null);
+                                setSubActivities([]);
+                                setShowActivityModal(false);
+                            }}
+                            dataKey="id"
+                            metaKeySelection={false}
+                        >
+                            <Column header="ID" body={(_, { rowIndex }) => rowIndex + 1} />
                             <Column field="title" header="Título" body={titleTemplate} />
+                            <Column field="subject" header="Materia" body={(rowData: ActivityItem) => rowData.subject || '-'} />
                             <Column field="type_activity" header="Tipo de actividad" />
+                            <Column field="fecha" header="Fecha del evento" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.event_date)} />
+                            <Column field="fecha_limite" header="Fecha límite" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.deadline)} />
                             <Column header="Acciones" body={activityActionsTemplate} />
                         </DataTable>
                     </div>
 
-                    <div className="col-12 lg:col-5">
-                        <Card title={selectedActivity ? `Subtareas: ${selectedActivity.title}` : 'Subtareas'}>
-                            {!selectedActivity ? (
-                                <div className="text-600">Selecciona una actividad para ver sus subtareas.</div>
-                            ) : (
-                                <div className="flex flex-column gap-3">
-                                    {activityDetailError && <div className="text-red-500 font-medium">{activityDetailError}</div>}
+                    <Dialog
+                        header={selectedActivity ? `Subtareas de ${selectedActivity.title}` : 'Subtareas'}
+                        visible={showActivityModal}
+                        style={{ width: '60rem', maxWidth: '95vw' }}
+                        modal
+                        draggable={false}
+                        onHide={() => {
+                            setShowActivityModal(false);
+                            setShowWorkPlanForm(false);
+                            setSubtaskMessage('');
+                        }}
+                    >
+                        {!selectedActivity ? (
+                            <div className="text-600">Selecciona una actividad para ver sus subtareas.</div>
+                        ) : (
+                            <div className="flex flex-column gap-3">
 
-                                    {activityDetailLoading ? (
-                                        <div className="text-600">Cargando información de la actividad...</div>
-                                    ) : selectedActivityDetail ? (
-                                        <div className="flex flex-column gap-2">
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Título</span>
-                                                <span>{selectedActivityDetail.title || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Tipo de actividad</span>
-                                                <span>{selectedActivityDetail.type_activity || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Descripción</span>
-                                                <span>{selectedActivityDetail.description || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Fecha del evento</span>
-                                                <span>{formatDateTime(selectedActivityDetail.event_date)}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Fecha límite</span>
-                                                <span>{formatDateTime(selectedActivityDetail.deadline)}</span>
-                                            </div>
+                                {activityDetailError && (
+                                    <div className="text-red-500 font-medium">{activityDetailError}</div>
+                                )}
+
+                                {activityDetailLoading ? (
+                                    <div className="text-600">Cargando información de la actividad...</div>
+                                ) : selectedActivityDetail ? (
+                                    <div className="grid">
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Título</span>
+                                            <span>{selectedActivityDetail.title || '-'}</span>
                                         </div>
-                                    ) : null}
 
-                                    {subActivitiesError && <div className="text-red-500 font-medium">{subActivitiesError}</div>}
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Tipo de actividad</span>
+                                            <span>{selectedActivityDetail.type_activity || '-'}</span>
+                                        </div>
 
-                                    <DataTable value={subActivities} loading={subActivitiesLoading} emptyMessage="No hay subtareas para esta actividad.">
-                                        <Column field="name" header="Nombre" />
-                                        <Column field="description" header="Descripción" body={(rowData: SubActivityItem) => rowData.description || '-'} />
-                                        <Column field="target_date" header="Fecha objetivo" body={(rowData: SubActivityItem) => formatSubActivityDate(rowData.target_date || null)} />
-                                        <Column header="Acciones" body={subActivityActionsTemplate} />
-                                    </DataTable>
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Descripción</span>
+                                            <span>{selectedActivityDetail.description || '-'}</span>
+                                        </div>
 
-                                    <div>
-                                        <Button type="button" label="Añadir plan de trabajo" onClick={() => setShowWorkPlanForm((prev) => !prev)} />
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Fecha del evento</span>
+                                            <span>{formatDateTime(selectedActivityDetail.event_date)}</span>
+                                        </div>
+
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Fecha límite</span>
+                                            <span>{formatDateTime(selectedActivityDetail.deadline)}</span>
+                                        </div>
                                     </div>
+                                ) : null}
 
-                                    {showWorkPlanForm && (
-                                        <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
-                                            {/* Nombre */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="taskName" className="font-semibold">
-                                                    Nombre *
-                                                </label>
-                                                <InputText
-                                                    id="taskName"
-                                                    value={taskName}
-                                                    onChange={(e) => {
-                                                        setTaskName(e.target.value);
-                                                        if (e.target.value.trim()) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, name: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, name: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, name: !taskName.trim() }));
-                                                    }}
-                                                    placeholder="Nombre de la subtarea"
-                                                    className={subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim()) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim())) && (
-                                                    <small className="p-error">El nombre es obligatorio.</small>
-                                                )}
-                                            </div>
+                                {subActivitiesError && (
+                                    <div className="text-red-500 font-medium">{subActivitiesError}</div>
+                                )}
 
-                                            {/* Descripción */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="taskDescription" className="font-semibold">
-                                                    Descripción
-                                                </label>
-                                                <InputTextarea
-                                                    id="taskDescription"
-                                                    value={taskDescription}
-                                                    onChange={(e) => setTaskDescription(e.target.value)}
-                                                    rows={3}
-                                                    placeholder="Describe la subtarea"
-                                                />
-                                            </div>
+                                <DataTable
+                                    value={subActivities}
+                                    loading={subActivitiesLoading}
+                                    emptyMessage="No hay subtareas para esta actividad."
+                                >
+                                    <Column field="name" header="Nombre" />
+                                    <Column
+                                        field="description"
+                                        header="Descripción"
+                                        body={(rowData: SubActivityItem) => rowData.description || '-'}
+                                    />
+                                    <Column
+                                        field="target_date"
+                                        header="Fecha objetivo"
+                                        body={(rowData: SubActivityItem) =>
+                                            formatSubActivityDate(rowData.target_date || null)
+                                        }
+                                    />
+                                    <Column header="Acciones" body={subActivityActionsTemplate} />
+                                </DataTable>
 
-                                            {/* Fecha objetivo */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="targetDate" className="font-semibold">
-                                                    Fecha objetivo *
-                                                </label>
-                                                <InputText
-                                                    id="targetDate"
-                                                    type="datetime-local"
-                                                    value={targetDate}
-                                                    onChange={(e) => {
-                                                        setTargetDate(e.target.value);
-                                                        if (e.target.value) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, targetDate: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: !targetDate }));
-                                                    }}
-                                                    className={subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate)) && (
-                                                    <small className="p-error">La fecha objetivo es obligatoria.</small>
-                                                )}
-                                            </div>
-
-                                            {/* Tiempo estimado */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="estimatedTime" className="font-semibold">
-                                                    Tiempo estimado *
-                                                </label>
-                                                <InputText
-                                                    id="estimatedTime"
-                                                    type="number"
-                                                    min={1}
-                                                    value={estimatedTime}
-                                                    onChange={(e) => {
-                                                        setEstimatedTime(e.target.value);
-                                                        if (e.target.value.trim()) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, estimatedTime: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: !estimatedTime.trim() }));
-                                                    }}
-                                                    placeholder="Ejemplo: 120"
-                                                    className={subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim()) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim())) && (
-                                                    <small className="p-error">El tiempo estimado es obligatorio.</small>
-                                                )}
-                                            </div>
-
-                                            {subtaskMessage && (
-                                                <div className={subtaskMessage.includes('correctamente') ? 'text-green-500 font-medium' : 'text-red-500 font-medium'}>
-                                                    {subtaskMessage}
-                                                </div>
-                                            )}
-
-                                            <div className="flex justify-content-end">
-                                                <Button type="submit" label="Guardar subtarea" icon="pi pi-check" loading={subtaskLoading} disabled={subtaskLoading} />
-                                            </div>
-                                        </form>
-                                    )}
+                                <div>
+                                    <Button
+                                        type="button"
+                                        label="Añadir subtareas"
+                                        onClick={() => setShowWorkPlanForm((prev) => !prev)}
+                                    />
                                 </div>
-                            )}
-                        </Card>
-                    </div>
+
+                                {showWorkPlanForm && (
+                                    <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="taskName" className="font-semibold">
+                                                Nombre *
+                                            </label>
+                                            <InputText
+                                                id="taskName"
+                                                value={taskName}
+                                                onChange={(e) => setTaskName(e.target.value)}
+                                                placeholder="Nombre de la subtarea"
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="taskDescription" className="font-semibold">
+                                                Descripción
+                                            </label>
+                                            <InputTextarea
+                                                id="taskDescription"
+                                                value={taskDescription}
+                                                onChange={(e) => setTaskDescription(e.target.value)}
+                                                rows={3}
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="targetDate" className="font-semibold">
+                                                Fecha objetivo *
+                                            </label>
+                                            <InputText
+                                                id="targetDate"
+                                                type="datetime-local"
+                                                value={targetDate}
+                                                onChange={(e) => setTargetDate(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="estimatedTime" className="font-semibold">
+                                                Tiempo estimado *
+                                            </label>
+                                            <InputText
+                                                id="estimatedTime"
+                                                type="number"
+                                                min={1}
+                                                value={estimatedTime}
+                                                onChange={(e) => setEstimatedTime(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="flex justify-content-end">
+                                            <Button
+                                                type="submit"
+                                                label="Guardar subtarea"
+                                                icon="pi pi-check"
+                                                loading={subtaskLoading}
+                                            />
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+                        )}
+                    </Dialog>
+
                 </div>
 
                 <Dialog
@@ -881,13 +928,18 @@ const ActivitiesPage = () => {
                 <Dialog
                     header="Editar actividad"
                     visible={activityEditDialogVisible}
-                    onHide={() => setActivityEditDialogVisible(false)}
+                    onHide={() => { setActivityEditDialogVisible(false); setActivityEditError(''); }}
                     style={{ width: '40rem', maxWidth: '95vw' }}
                     modal
                     draggable={false}
                 >
                     {editingActivity && (
                         <form className="flex flex-column gap-3" onSubmit={handleSaveActivityEdit}>
+                            {/* error dentro del dialog */}
+                            {activityEditError && (
+                                <div className="text-red-500 font-medium mb-2">{activityEditError}</div>
+                            )}
+
                             <div className="flex flex-column gap-2">
                                 <label htmlFor="editActivityTitle" className="font-semibold">Título</label>
                                 <InputText id="editActivityTitle" value={editingActivity.title} onChange={(e) => setEditingActivity((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
@@ -930,7 +982,7 @@ const ActivitiesPage = () => {
                             </div>
 
                             <div className="flex justify-content-end gap-2">
-                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => setActivityEditDialogVisible(false)} />
+                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setActivityEditDialogVisible(false); setActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
                             </div>
                         </form>
@@ -940,13 +992,18 @@ const ActivitiesPage = () => {
                 <Dialog
                     header="Editar subtarea"
                     visible={subActivityEditDialogVisible}
-                    onHide={() => setSubActivityEditDialogVisible(false)}
+                    onHide={() => { setSubActivityEditDialogVisible(false); setSubActivityEditError(''); }}
                     style={{ width: '36rem', maxWidth: '95vw' }}
                     modal
                     draggable={false}
                 >
                     {editingSubActivity && (
                         <form className="flex flex-column gap-3" onSubmit={handleSaveSubActivityEdit}>
+                            {/*  error dentro del dialog */}
+                            {subActivityEditError && (
+                                <div className="text-red-500 font-medium mb-2">{subActivityEditError}</div>
+                            )}
+
                             <div className="flex flex-column gap-2">
                                 <label htmlFor="editSubActivityName" className="font-semibold">Nombre</label>
                                 <InputText id="editSubActivityName" value={String(editingSubActivity.name || '')} onChange={(e) => setEditingSubActivity((prev) => (prev ? { ...prev, name: e.target.value } : prev))} />
@@ -968,7 +1025,7 @@ const ActivitiesPage = () => {
                             </div>
 
                             <div className="flex justify-content-end gap-2">
-                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => setSubActivityEditDialogVisible(false)} />
+                                <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setSubActivityEditDialogVisible(false); setSubActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
                             </div>
                         </form>
