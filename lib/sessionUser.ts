@@ -1,4 +1,5 @@
 import JwtService from '@/service/JwtService';
+import ApiService from '@/service/ApiService';
 
 export interface SessionUser {
     id?: number | string;
@@ -96,6 +97,25 @@ export const getSessionUserDisplayNameFromToken = (token: string | null, fallbac
     const payload = decodeSessionTokenPayload(token);
     if (!payload) return fallback;
     return payload.first_name || payload.firstName || payload.name || payload.username || payload.email || fallback;
+};
+
+export const validateAndRefreshToken = async (): Promise<string | null> => {
+    if (typeof window === 'undefined') return null;
+
+    const currentToken = getSessionToken();
+
+    // Si el token no está expirado, devolver el actual
+    if (!JwtService.isTokenExpired(currentToken)) {
+        return currentToken;
+    }
+
+    // Token expirado, intentar refresh
+    try {
+        const tokenResponse = await ApiService.refreshToken();
+        return tokenResponse?.access || null;
+    } catch (error) {
+        return null;
+    }
 };
 
 const parseUserId = (value: number | string | undefined): number | null => {

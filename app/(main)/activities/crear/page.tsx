@@ -7,8 +7,12 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Button } from 'primereact/button';
 import { Dropdown } from 'primereact/dropdown';
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
+import { Dialog } from 'primereact/dialog';
 import JwtService from '@/service/JwtService';
 import { ROUTES } from '@/lib/routes';
+import { validateAndRefreshToken } from '@/lib/sessionUser';
 
 interface SessionUser {
     id?: number | string;
@@ -33,6 +37,13 @@ interface CreateActivityPayload {
     deadline: string | null;
     grade: number | null;
     user: number;
+}
+
+interface SubActivityPayload {
+    name: string;
+    description: string | null;
+    target_date: string | null;
+    estimated_time: number;
 }
 
 const ACTIVITY_TYPE_OPTIONS = [
@@ -115,13 +126,6 @@ const decodeTokenPayload = (token: string): TokenPayload | null => {
     }
 };
 
-const getValidToken = (): string | null => {
-    const rawToken = localStorage.getItem('access_token') || JwtService.getToken();
-    if (!rawToken) return null;
-    if (rawToken === 'undefined' || rawToken === 'null') return null;
-    return rawToken;
-};
-
 const CrearPage = () => {
     const router = useRouter();
     const [titulo, setTitulo] = useState('');
@@ -130,13 +134,20 @@ const CrearPage = () => {
     const [descripcion, setDescripcion] = useState('');
     const [eventDate, setEventDate] = useState('');
     const [deadline, setDeadline] = useState('');
-    const [grade, setGrade] = useState('');
     const [displayName, setDisplayName] = useState('usuario');
     const [loggedUserId, setLoggedUserId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    // States para subtareas
+    const [subActivities, setSubActivities] = useState<SubActivityPayload[]>([]);
+    const [showSubActivityDialog, setShowSubActivityDialog] = useState(false);
+    const [subTaskName, setSubTaskName] = useState('');
+    const [subTaskDescription, setSubTaskDescription] = useState('');
+    const [subTaskTargetDate, setSubTaskTargetDate] = useState('');
+    const [subTaskEstimatedTime, setSubTaskEstimatedTime] = useState('');
 
     const activityCreateEndpoint = process.env.NEXT_PUBLIC_ACTIVITY_CREATE_ENDPOINT || '/activities/';
     const activityCreateUrl = activityCreateEndpoint.startsWith('http') ? activityCreateEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${activityCreateEndpoint}`;
@@ -156,9 +167,9 @@ const CrearPage = () => {
 
     useEffect(() => {
         const bootstrapSession = async () => {
-            const token = getValidToken();
+            const validToken = await validateAndRefreshToken();
 
-            if (!token) {
+            if (!validToken) {
                 router.replace(ROUTES.AUTH.LOGIN);
                 return;
             }
@@ -168,14 +179,14 @@ const CrearPage = () => {
             let resolvedUser = storedUser;
 
             if (!userId) {
-                const payload = decodeTokenPayload(token);
+                const payload = decodeTokenPayload(validToken);
                 userId = parseUserId(payload?.user_id ?? payload?.id ?? payload?.sub);
             }
 
             if (!userId) {
                 try {
                     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-                        headers: { Authorization: `Bearer ${token}` }
+                        headers: { Authorization: `Bearer ${validToken}` }
                     });
 
                     if (response.ok) {
@@ -218,7 +229,7 @@ const CrearPage = () => {
             return;
         }
 
-        const token = getValidToken();
+        const token = await validateAndRefreshToken();
         if (!token) {
             router.replace(ROUTES.AUTH.LOGIN);
             return;
@@ -231,14 +242,9 @@ const CrearPage = () => {
             subject: subject.trim(),
             event_date: toIsoOrNull(eventDate),
             deadline: toIsoOrNull(deadline),
-            grade: grade.trim() ? Number.parseFloat(grade) : null,
+            grade: null,
             user: loggedUserId
         };
-
-        if (payload.grade !== null && Number.isNaN(payload.grade)) {
-            setError('La nota debe ser un número válido.');
-            return;
-        }
 
         setLoading(true);
 
@@ -257,19 +263,86 @@ const CrearPage = () => {
                 throw new Error(formatApiError(errorData));
             }
 
-            setSuccess('Actividad creada correctamente.');
+            const createdActivity = await response.json();
+            const activityId = createdActivity?.id;
+
+            // Crear subtareas si existen
+            if (activityId && subActivities.length > 0) {
+                const subActivityEndpoint = process.env.NEXT_PUBLIC_WORK_PLAN_ENDPOINT || '/sub-activities/';
+                const subActivityUrl = subActivityEndpoint.startsWith('http') ? subActivityEndpoint : `${process.env.NEXT_PUBLIC_API_URL}${subActivityEndpoint}`;
+
+                for (const subActivity of subActivities) {
+                    await fetch(subActivityUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            ...subActivity,
+                            activity: activityId
+                        })
+                    }).catch(() => {
+                        console.warn('Error al crear subtarea');
+                    });
+                }
+            }
+
+            setSuccess('Actividad y subtareas creadas correctamente.');
             setTitulo('');
             setTypeActivity('');
             setSubject('');
             setDescripcion('');
             setEventDate('');
             setDeadline('');
-            setGrade('');
+            setSubActivities([]);
+
+            setTimeout(() => {
+                router.push(ROUTES.HOME);
+            }, 2000);
         } catch (err: any) {
             setError(err.message || 'Error al crear la actividad.');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleAddSubActivity = () => {
+        if (!subTaskName.trim()) {
+            setError('El nombre de la subtarea es obligatorio.');
+            return;
+        }
+
+        const estimatedTime = Number.parseInt(subTaskEstimatedTime, 10);
+        if (Number.isNaN(estimatedTime) || estimatedTime < 1) {
+            setError('El tiempo estimado debe ser un número mayor a 0.');
+            return;
+        }
+
+        const newSubActivity: SubActivityPayload = {
+            name: subTaskName.trim(),
+            description: subTaskDescription.trim() ? subTaskDescription.trim() : null,
+            target_date: subTaskTargetDate ? new Date(subTaskTargetDate).toISOString() : null,
+            estimated_time: estimatedTime
+        };
+
+        setSubActivities([...subActivities, newSubActivity]);
+        setSubTaskName('');
+        setSubTaskDescription('');
+        setSubTaskTargetDate('');
+        setSubTaskEstimatedTime('');
+        setError('');
+        setShowSubActivityDialog(false);
+    };
+
+    const handleRemoveSubActivity = (index: number) => {
+        setSubActivities(subActivities.filter((_, i) => i !== index));
+    };
+
+    const formatDate = (dateString: string | null) => {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        return date.toLocaleString('es-CO');
     };
 
     if (isCheckingAuth) {
@@ -343,20 +416,131 @@ const CrearPage = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-column gap-2">
-                    <label htmlFor="grade" className="font-medium">
-                        Nota
-                    </label>
-                    <InputText id="grade" type="number" step="0.01" value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="Ejemplo: 4.5" />
-                </div>
-
                 {error && <div className="text-red-500 font-medium">{error}</div>}
                 {success && <div className="text-green-500 font-medium">{success}</div>}
+
+                <div className="border-top pt-4">
+                    <div className="flex align-items-center justify-content-between mb-4">
+                        <h2 className="text-xl font-semibold text-900 m-0">Subtareas</h2>
+                        <Button label="Agregar subtarea" icon="pi pi-plus" onClick={() => setShowSubActivityDialog(true)} type="button" />
+                    </div>
+
+                    {subActivities.length > 0 && (
+                        <DataTable value={subActivities} className="mb-4">
+                            <Column field="name" header="Nombre" />
+                            <Column field="description" header="Descripción" body={(rowData: SubActivityPayload) => rowData.description || '-'} />
+                            <Column
+                                field="target_date"
+                                header="Fecha objetivo"
+                                body={(rowData: SubActivityPayload) => formatDate(rowData.target_date)}
+                            />
+                            <Column field="estimated_time" header="Tiempo estimado (min)" />
+                            <Column
+                                header="Acciones"
+                                body={(_, { rowIndex }) => (
+                                    <Button
+                                        icon="pi pi-trash"
+                                        rounded
+                                        text
+                                        severity="danger"
+                                        onClick={() => handleRemoveSubActivity(rowIndex)}
+                                        type="button"
+                                    />
+                                )}
+                            />
+                        </DataTable>
+                    )}
+                </div>
 
                 <div>
                     <Button type="submit" label="Guardar" icon="pi pi-check" loading={loading} disabled={!titulo.trim() || !typeActivity.trim() || !subject.trim() || loading} />
                 </div>
             </form>
+
+            <Dialog
+                header="Agregar subtarea"
+                visible={showSubActivityDialog}
+                onHide={() => {
+                    setShowSubActivityDialog(false);
+                    setSubTaskName('');
+                    setSubTaskDescription('');
+                    setSubTaskTargetDate('');
+                    setSubTaskEstimatedTime('');
+                }}
+                style={{ width: '40rem', maxWidth: '95vw' }}
+                modal
+                draggable={false}
+            >
+                <div className="flex flex-column gap-3">
+                    <div className="flex flex-column gap-2">
+                        <label htmlFor="subTaskName" className="font-medium">
+                            Nombre *
+                        </label>
+                        <InputText
+                            id="subTaskName"
+                            value={subTaskName}
+                            onChange={(e) => setSubTaskName(e.target.value)}
+                            placeholder="Nombre de la subtarea"
+                        />
+                    </div>
+
+                    <div className="flex flex-column gap-2">
+                        <label htmlFor="subTaskDescription" className="font-medium">
+                            Descripción
+                        </label>
+                        <InputTextarea
+                            id="subTaskDescription"
+                            value={subTaskDescription}
+                            onChange={(e) => setSubTaskDescription(e.target.value)}
+                            rows={3}
+                            placeholder="Descripción de la subtarea"
+                        />
+                    </div>
+
+                    <div className="flex flex-column gap-2">
+                        <label htmlFor="subTaskTargetDate" className="font-medium">
+                            Fecha objetivo
+                        </label>
+                        <InputText
+                            id="subTaskTargetDate"
+                            type="datetime-local"
+                            value={subTaskTargetDate}
+                            onChange={(e) => setSubTaskTargetDate(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="flex flex-column gap-2">
+                        <label htmlFor="subTaskEstimatedTime" className="font-medium">
+                            Tiempo estimado (minutos) *
+                        </label>
+                        <InputText
+                            id="subTaskEstimatedTime"
+                            type="number"
+                            min={1}
+                            value={subTaskEstimatedTime}
+                            onChange={(e) => setSubTaskEstimatedTime(e.target.value)}
+                            placeholder="Ej: 120"
+                        />
+                    </div>
+
+                    <div className="flex justify-content-end gap-2">
+                        <Button
+                            type="button"
+                            label="Cancelar"
+                            severity="secondary"
+                            outlined
+                            onClick={() => {
+                                setShowSubActivityDialog(false);
+                                setSubTaskName('');
+                                setSubTaskDescription('');
+                                setSubTaskTargetDate('');
+                                setSubTaskEstimatedTime('');
+                            }}
+                        />
+                        <Button type="button" label="Agregar" icon="pi pi-plus" onClick={handleAddSubActivity} />
+                    </div>
+                </div>
+            </Dialog>
         </Card>
     );
 };
