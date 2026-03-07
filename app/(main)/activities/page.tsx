@@ -12,6 +12,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { decodeSessionTokenPayload, getSessionToken } from '@/lib/sessionUser';
 import { Toast } from 'primereact/toast';
+import { useRouter } from 'next/navigation';
 
 
 interface ActivityItem {
@@ -60,6 +61,7 @@ const ACTIVITY_TYPE_OPTIONS = [
 ];
 
 const ActivitiesPage = () => {
+    const router = useRouter();
     const toastRef = useRef<Toast>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [activitiesLoading, setActivitiesLoading] = useState(false);
@@ -69,6 +71,7 @@ const ActivitiesPage = () => {
     const [actionError, setActionError] = useState('');
 
     const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
+    const [showActivityModal, setShowActivityModal] = useState(false);
     const [selectedActivityDetail, setSelectedActivityDetail] = useState<ActivityDetail | null>(null);
     const [activityDetailLoading, setActivityDetailLoading] = useState(false);
     const [activityDetailError, setActivityDetailError] = useState('');
@@ -142,7 +145,10 @@ const ActivitiesPage = () => {
             }
 
             const data = await response.json();
+            console.log('Respuesta cruda /activities/:', data);
+
             const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+            console.table(list);
 
             const payloadUserId = Number.parseInt(String(tokenPayload?.user_id ?? tokenPayload?.id ?? tokenPayload?.sub), 10);
             const hasPayloadUserId = !Number.isNaN(payloadUserId);
@@ -161,6 +167,7 @@ const ActivitiesPage = () => {
                     raw: item
                 }));
 
+            console.table(formatted);
             setActivities(formatted);
         } catch (error: any) {
             setActivitiesError(error.message || 'Error al cargar actividades.');
@@ -277,6 +284,7 @@ const ActivitiesPage = () => {
 
     const openActivityDetails = (activity: ActivityItem) => {
         setSelectedActivity(activity);
+        setShowActivityModal(true);
         setSelectedActivityDetail(null);
         setActivityDetailError('');
         setShowWorkPlanForm(false);
@@ -685,181 +693,203 @@ const ActivitiesPage = () => {
             <Toast ref={toastRef} />
             <div className="flex flex-column gap-4">
                 <div className="flex justify-content-end">
-                    <Button label="Crear actividad" icon="pi pi-plus" onClick={handleOpenCreateDialog} />
+                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => router.push('/activities/crear')} />
                 </div>
 
                 {activitiesError && <div className="text-red-500 font-medium">{activitiesError}</div>}
                 {actionError && <div className="text-red-500 font-medium">{actionError}</div>}
 
                 <div className="grid">
-                    <div className="col-12 lg:col-7">
-                        <DataTable value={activities} loading={activitiesLoading} emptyMessage="No hay actividades registradas.">
+                    <div className="col-12 ">
+                        <DataTable
+                            value={activities}
+                            loading={activitiesLoading}
+                            emptyMessage="No hay actividades registradas."
+                            selectionMode="single"
+                            selection={selectedActivity}
+                            onSelectionChange={(e) => {
+                                const activity = e.value as ActivityItem | null;
+
+                                if (activity) {
+                                    openActivityDetails(activity);
+                                    return;
+                                }
+
+                                setSelectedActivity(null);
+                                setSelectedActivityDetail(null);
+                                setSubActivities([]);
+                                setShowActivityModal(false);
+                            }}
+                            dataKey="id"
+                            metaKeySelection={false}
+                        >
                             <Column field="id" header="ID" />
                             <Column field="title" header="Título" body={titleTemplate} />
                             <Column field="type_activity" header="Tipo de actividad" />
                             <Column header="Acciones" body={activityActionsTemplate} />
+                            <Column field="fecha" header="Fecha del evento" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.event_date)} />
+                            <Column field="fecha_limite" header="Fecha límite" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.deadline)} />
                         </DataTable>
                     </div>
 
-                    <div className="col-12 lg:col-5">
-                        <Card title={selectedActivity ? `Subtareas: ${selectedActivity.title}` : 'Subtareas'}>
-                            {!selectedActivity ? (
-                                <div className="text-600">Selecciona una actividad para ver sus subtareas.</div>
-                            ) : (
-                                <div className="flex flex-column gap-3">
-                                    {activityDetailError && <div className="text-red-500 font-medium">{activityDetailError}</div>}
+                    <Dialog
+                        header={selectedActivity ? `Subtareas de ${selectedActivity.title}` : 'Subtareas'}
+                        visible={showActivityModal}
+                        style={{ width: '60rem', maxWidth: '95vw' }}
+                        modal
+                        draggable={false}
+                        onHide={() => {
+                            setShowActivityModal(false);
+                            setShowWorkPlanForm(false);
+                            setSubtaskMessage('');
+                        }}
+                    >
+                        {!selectedActivity ? (
+                            <div className="text-600">Selecciona una actividad para ver sus subtareas.</div>
+                        ) : (
+                            <div className="flex flex-column gap-3">
 
-                                    {activityDetailLoading ? (
-                                        <div className="text-600">Cargando información de la actividad...</div>
-                                    ) : selectedActivityDetail ? (
-                                        <div className="flex flex-column gap-2">
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Título</span>
-                                                <span>{selectedActivityDetail.title || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Tipo de actividad</span>
-                                                <span>{selectedActivityDetail.type_activity || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Descripción</span>
-                                                <span>{selectedActivityDetail.description || '-'}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Fecha del evento</span>
-                                                <span>{formatDateTime(selectedActivityDetail.event_date)}</span>
-                                            </div>
-                                            <div className="flex flex-column">
-                                                <span className="font-semibold">Fecha límite</span>
-                                                <span>{formatDateTime(selectedActivityDetail.deadline)}</span>
-                                            </div>
+                                {activityDetailError && (
+                                    <div className="text-red-500 font-medium">{activityDetailError}</div>
+                                )}
+
+                                {activityDetailLoading ? (
+                                    <div className="text-600">Cargando información de la actividad...</div>
+                                ) : selectedActivityDetail ? (
+                                    <div className="grid">
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Título</span>
+                                            <span>{selectedActivityDetail.title || '-'}</span>
                                         </div>
-                                    ) : null}
 
-                                    {subActivitiesError && <div className="text-red-500 font-medium">{subActivitiesError}</div>}
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Tipo de actividad</span>
+                                            <span>{selectedActivityDetail.type_activity || '-'}</span>
+                                        </div>
 
-                                    <DataTable value={subActivities} loading={subActivitiesLoading} emptyMessage="No hay subtareas para esta actividad.">
-                                        <Column field="name" header="Nombre" />
-                                        <Column field="description" header="Descripción" body={(rowData: SubActivityItem) => rowData.description || '-'} />
-                                        <Column field="target_date" header="Fecha objetivo" body={(rowData: SubActivityItem) => formatSubActivityDate(rowData.target_date || null)} />
-                                        <Column header="Acciones" body={subActivityActionsTemplate} />
-                                    </DataTable>
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Descripción</span>
+                                            <span>{selectedActivityDetail.description || '-'}</span>
+                                        </div>
 
-                                    <div>
-                                        <Button type="button" label="Añadir plan de trabajo" onClick={() => setShowWorkPlanForm((prev) => !prev)} />
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Fecha del evento</span>
+                                            <span>{formatDateTime(selectedActivityDetail.event_date)}</span>
+                                        </div>
+
+                                        <div className="col-12 md:col-6 flex flex-column gap-1">
+                                            <span className="font-semibold">Fecha límite</span>
+                                            <span>{formatDateTime(selectedActivityDetail.deadline)}</span>
+                                        </div>
                                     </div>
+                                ) : null}
 
-                                    {showWorkPlanForm && (
-                                        <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
-                                            {/* Nombre */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="taskName" className="font-semibold">
-                                                    Nombre *
-                                                </label>
-                                                <InputText
-                                                    id="taskName"
-                                                    value={taskName}
-                                                    onChange={(e) => {
-                                                        setTaskName(e.target.value);
-                                                        if (e.target.value.trim()) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, name: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, name: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, name: !taskName.trim() }));
-                                                    }}
-                                                    placeholder="Nombre de la subtarea"
-                                                    className={subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim()) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.name || (subtaskTouched.name && !taskName.trim())) && (
-                                                    <small className="p-error">El nombre es obligatorio.</small>
-                                                )}
-                                            </div>
+                                {subActivitiesError && (
+                                    <div className="text-red-500 font-medium">{subActivitiesError}</div>
+                                )}
 
-                                            {/* Descripción */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="taskDescription" className="font-semibold">
-                                                    Descripción
-                                                </label>
-                                                <InputTextarea
-                                                    id="taskDescription"
-                                                    value={taskDescription}
-                                                    onChange={(e) => setTaskDescription(e.target.value)}
-                                                    rows={3}
-                                                    placeholder="Describe la subtarea"
-                                                />
-                                            </div>
+                                <DataTable
+                                    value={subActivities}
+                                    loading={subActivitiesLoading}
+                                    emptyMessage="No hay subtareas para esta actividad."
+                                >
+                                    <Column field="name" header="Nombre" />
+                                    <Column
+                                        field="description"
+                                        header="Descripción"
+                                        body={(rowData: SubActivityItem) => rowData.description || '-'}
+                                    />
+                                    <Column
+                                        field="target_date"
+                                        header="Fecha objetivo"
+                                        body={(rowData: SubActivityItem) =>
+                                            formatSubActivityDate(rowData.target_date || null)
+                                        }
+                                    />
+                                    <Column header="Acciones" body={subActivityActionsTemplate} />
+                                </DataTable>
 
-                                            {/* Fecha objetivo */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="targetDate" className="font-semibold">
-                                                    Fecha objetivo *
-                                                </label>
-                                                <InputText
-                                                    id="targetDate"
-                                                    type="datetime-local"
-                                                    value={targetDate}
-                                                    onChange={(e) => {
-                                                        setTargetDate(e.target.value);
-                                                        if (e.target.value) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, targetDate: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, targetDate: !targetDate }));
-                                                    }}
-                                                    className={subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.targetDate || (subtaskTouched.targetDate && !targetDate)) && (
-                                                    <small className="p-error">La fecha objetivo es obligatoria.</small>
-                                                )}
-                                            </div>
-
-                                            {/* Tiempo estimado */}
-                                            <div className="flex flex-column gap-2">
-                                                <label htmlFor="estimatedTime" className="font-semibold">
-                                                    Tiempo estimado *
-                                                </label>
-                                                <InputText
-                                                    id="estimatedTime"
-                                                    type="number"
-                                                    min={1}
-                                                    value={estimatedTime}
-                                                    onChange={(e) => {
-                                                        setEstimatedTime(e.target.value);
-                                                        if (e.target.value.trim()) {
-                                                            setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: false }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setSubtaskTouched((prev) => ({ ...prev, estimatedTime: true }));
-                                                        setSubtaskFieldErrors((prev) => ({ ...prev, estimatedTime: !estimatedTime.trim() }));
-                                                    }}
-                                                    placeholder="Ejemplo: 120"
-                                                    className={subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim()) ? 'p-invalid' : ''}
-                                                />
-                                                {(subtaskFieldErrors.estimatedTime || (subtaskTouched.estimatedTime && !estimatedTime.trim())) && (
-                                                    <small className="p-error">El tiempo estimado es obligatorio.</small>
-                                                )}
-                                            </div>
-
-                                            {subtaskMessage && (
-                                                <div className={subtaskMessage.includes('correctamente') ? 'text-green-500 font-medium' : 'text-red-500 font-medium'}>
-                                                    {subtaskMessage}
-                                                </div>
-                                            )}
-
-                                            <div className="flex justify-content-end">
-                                                <Button type="submit" label="Guardar subtarea" icon="pi pi-check" loading={subtaskLoading} disabled={subtaskLoading} />
-                                            </div>
-                                        </form>
-                                    )}
+                                <div>
+                                    <Button
+                                        type="button"
+                                        label="Añadir subtareas"
+                                        onClick={() => setShowWorkPlanForm((prev) => !prev)}
+                                    />
                                 </div>
-                            )}
-                        </Card>
-                    </div>
+
+                                {showWorkPlanForm && (
+                                    <form className="flex flex-column gap-3" onSubmit={handleSubtaskSubmit}>
+                                        {/* Nombre */}
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="taskName" className="font-semibold">
+                                                Nombre *
+                                            </label>
+
+                                            <InputText
+                                                id="taskName"
+                                                value={taskName}
+                                                onChange={(e) => setTaskName(e.target.value)}
+                                                placeholder="Nombre de la subtarea"
+                                            />
+                                        </div>
+
+                                        {/* Descripción */}
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="taskDescription" className="font-semibold">
+                                                Descripción
+                                            </label>
+
+                                            <InputTextarea
+                                                id="taskDescription"
+                                                value={taskDescription}
+                                                onChange={(e) => setTaskDescription(e.target.value)}
+                                                rows={3}
+                                            />
+                                        </div>
+
+                                        {/* Fecha */}
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="targetDate" className="font-semibold">
+                                                Fecha objetivo *
+                                            </label>
+
+                                            <InputText
+                                                id="targetDate"
+                                                type="datetime-local"
+                                                value={targetDate}
+                                                onChange={(e) => setTargetDate(e.target.value)}
+                                            />
+                                        </div>
+
+                                        {/* Tiempo estimado */}
+                                        <div className="flex flex-column gap-2">
+                                            <label htmlFor="estimatedTime" className="font-semibold">
+                                                Tiempo estimado *
+                                            </label>
+
+                                            <InputText
+                                                id="estimatedTime"
+                                                type="number"
+                                                min={1}
+                                                value={estimatedTime}
+                                                onChange={(e) => setEstimatedTime(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="flex justify-content-end">
+                                            <Button
+                                                type="submit"
+                                                label="Guardar subtarea"
+                                                icon="pi pi-check"
+                                                loading={subtaskLoading}
+                                            />
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+                        )}
+                    </Dialog>
+
                 </div>
 
                 <Dialog
