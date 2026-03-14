@@ -13,6 +13,8 @@ import { Tag } from 'primereact/tag';
 import { Dialog } from 'primereact/dialog';
 import { Divider } from 'primereact/divider';
 import { Toast } from 'primereact/toast';
+import { RescheduleModal, ValidateTentativeDateResult } from '@/components/RescheduleModal';
+import { CapacityTracker } from '@/components/CapacityTracker';
 
 interface TokenPayload {
     first_name?: string;
@@ -139,22 +141,12 @@ const Dashboard = () => {
     // Reschedule modal
     const [rescheduleItem, setRescheduleItem] = useState<TodayActivityItem | null>(null);
     const [rescheduleVisible, setRescheduleVisible] = useState(false);
-    const [rescheduleDate, setRescheduleDate] = useState('');
-    const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
     const formatDateTime = (value: string | null | undefined) => {
         if (!value) return '-';
         const parsedDate = new Date(value);
         if (Number.isNaN(parsedDate.getTime())) return String(value);
         return parsedDate.toLocaleString('es-CO');
-    };
-
-    const toDatetimeLocalValue = (value: string | null | undefined): string => {
-        if (!value) return '';
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return '';
-        const offset = d.getTimezoneOffset() * 60000;
-        return new Date(d.getTime() - offset).toISOString().slice(0, 16);
     };
 
     const getDueDate = (item: TodayActivityItem): Date | null => {
@@ -251,54 +243,63 @@ const Dashboard = () => {
     const handleOpenReschedule = (e: React.MouseEvent, item: TodayActivityItem) => {
         e.stopPropagation();
         setRescheduleItem(item);
-        setRescheduleDate(toDatetimeLocalValue(item.target_date));
         setRescheduleVisible(true);
     };
 
-    const handleSaveReschedule = async () => {
-        if (!rescheduleItem?.id || !rescheduleDate) return;
+    const handleValidateTentativeDate = async (
+        subActivityId: number,
+        tentativeDate: string
+    ): Promise<ValidateTentativeDateResult> => {
         const token = getSessionToken();
-        if (!token) return;
-
-        setRescheduleLoading(true);
-        try {
-            const iso = new Date(rescheduleDate).toISOString();
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${rescheduleItem.id}/`, {
-                method: 'PATCH',
+        if (!token) throw new Error('Sin sesión activa.');
+        const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/validate-tentative-date`,
+            {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ target_date: iso })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                const detail =
-                    (typeof errorData?.detail === 'string' && errorData.detail) ||
-                    (typeof errorData?.message === 'string' && errorData.message) ||
-                    (Array.isArray(errorData?.target_date) && errorData.target_date[0]) ||
-                    (typeof errorData?.target_date === 'string' && errorData.target_date) ||
-                    'No se pudo reprogramar la subtarea.';
-                throw new Error(detail);
+                body: JSON.stringify({ subactivity: subActivityId, tentative_date: tentativeDate })
             }
+        );
+        const data = await response.json();
+        return data as ValidateTentativeDateResult;
+    };
 
-            toastRef.current?.show({
-                severity: 'success',
-                summary: 'Reprogramada',
-                detail: 'La fecha de la subtarea se actualizó correctamente.',
-                life: 3000
-            });
-            setRescheduleVisible(false);
-            setRescheduleItem(null);
-            fetchToday(filters);
-        } catch (err: any) {
+    const handleSaveReschedule = async (subActivityId: number, newDate: string) => {
+        const token = getSessionToken();
+        if (!token) throw new Error('Sin sesión activa.');
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${subActivityId}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ target_date: newDate })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const detail =
+                (typeof errorData?.detail === 'string' && errorData.detail) ||
+                (typeof errorData?.message === 'string' && errorData.message) ||
+                (Array.isArray(errorData?.target_date) && errorData.target_date[0]) ||
+                (typeof errorData?.target_date === 'string' && errorData.target_date) ||
+                'No se pudo reprogramar la subtarea.';
             toastRef.current?.show({
                 severity: 'error',
                 summary: 'No se pudo reprogramar',
-                detail: err.message || 'Error al actualizar la fecha.',
+                detail,
                 life: 5000
             });
-        } finally {
-            setRescheduleLoading(false);
+            throw new Error(detail);
         }
+
+        toastRef.current?.show({
+            severity: 'success',
+            summary: 'Reprogramada',
+            detail: 'La fecha de la subtarea se actualizó correctamente.',
+            life: 3000
+        });
+        setRescheduleVisible(false);
+        setRescheduleItem(null);
+        fetchToday(filters);
     };
 
     const applyFilters = () => fetchToday(filters);
@@ -469,8 +470,17 @@ const Dashboard = () => {
 
                 {/* Header */}
                 <div className="surface-ground border-round-lg p-3 md:p-4">
-                    <div className="flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                        <div className="text-2xl font-bold text-900">Hola, {displayName} </div>
+                    {/* Row 1: name + tags + help button */}
+                    <div className="flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div className="flex align-items-center flex-wrap gap-2">
+                            <div className="text-2xl font-bold text-900">Hola, {displayName}</div>
+                            <div className="flex flex-wrap gap-2">
+                                <Tag value={`Total: ${totalItems}`} icon="pi pi-list" style={{ backgroundColor: '#E5E7EB', color: '#374151' }} />
+                                {groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
+                                {groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
+                                {groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
+                            </div>
+                        </div>
                         <Button
                             type="button"
                             text
@@ -482,7 +492,7 @@ const Dashboard = () => {
                     </div>
 
                     {isHelpOpen && (
-                        <div className="mt-2 mb-3 p-3 surface-card border-1 border-round" style={{ borderColor: 'var(--surface-border)' }}>
+                        <div className="mb-3 p-3 surface-card border-1 border-round" style={{ borderColor: 'var(--surface-border)' }}>
                             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }} className="flex flex-column gap-2 text-600 text-sm line-height-3">
                                 <li><strong>🔴 Vencidas:</strong> subtareas cuya fecha límite ya expiró.</li>
                                 <li><strong>🟢 Para hoy:</strong> subtareas que vencen en lo que resta del día.</li>
@@ -495,12 +505,8 @@ const Dashboard = () => {
                         </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2">
-                        <Tag value={`Total: ${totalItems}`} icon="pi pi-list" style={{ backgroundColor: '#E5E7EB', color: '#374151' }} />
-                        {groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
-                        {groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
-                        {groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
-                    </div>
+                    {/* Row 2: capacity tracker */}
+                    <CapacityTracker />
                 </div>
 
                 {error && <div className="p-3 border-round bg-red-50 text-red-600 font-medium">{error}</div>}
@@ -660,60 +666,16 @@ const Dashboard = () => {
             </Dialog>
 
             {/* Reschedule Modal */}
-            <Dialog
-                header={
-                    <div className="flex align-items-center gap-2">
-                        <i className="pi pi-calendar-plus text-primary" />
-                        <span>Reprogramar subtarea</span>
-                    </div>
-                }
-                visible={rescheduleVisible}
-                onHide={() => { setRescheduleVisible(false); setRescheduleItem(null); }}
-                style={{ width: '26rem', maxWidth: '95vw' }}
-                modal
-                draggable={false}
-            >
-                {rescheduleItem && (
-                    <div className="flex flex-column gap-4">
-                        <div>
-                            <div className="text-900 font-semibold mb-1">{taskTitle(rescheduleItem)}</div>
-                            <div className="text-500 text-sm flex align-items-center gap-1">
-                                <i className="pi pi-calendar" style={{ fontSize: '0.75rem' }} />
-                                Fecha actual: {formatDateTime(rescheduleItem.target_date)}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-column gap-2">
-                            <label className="text-sm font-semibold text-700">Nueva fecha y hora</label>
-                            <InputText
-                                type="datetime-local"
-                                value={rescheduleDate}
-                                onChange={(e) => setRescheduleDate(e.target.value)}
-                                className="w-full"
-                            />
-                        </div>
-
-                        <div className="flex justify-content-end gap-2 mt-2">
-                            <Button
-                                type="button"
-                                label="Cancelar"
-                                severity="secondary"
-                                outlined
-                                onClick={() => { setRescheduleVisible(false); setRescheduleItem(null); }}
-                                disabled={rescheduleLoading}
-                            />
-                            <Button
-                                type="button"
-                                label="Guardar cambios"
-                                icon="pi pi-check"
-                                loading={rescheduleLoading}
-                                disabled={!rescheduleDate}
-                                onClick={handleSaveReschedule}
-                            />
-                        </div>
-                    </div>
-                )}
-            </Dialog>
+            <RescheduleModal
+                isOpen={rescheduleVisible}
+                onClose={() => { setRescheduleVisible(false); setRescheduleItem(null); }}
+                subActivityId={rescheduleItem?.id ?? 0}
+                title={taskTitle(rescheduleItem ?? {})}
+                estimatedTime={rescheduleItem?.estimated_time}
+                currentDate={rescheduleItem ? formatDateTime(rescheduleItem.target_date) : null}
+                onValidate={handleValidateTentativeDate}
+                onSave={handleSaveReschedule}
+            />
         </Card>
     );
 };
