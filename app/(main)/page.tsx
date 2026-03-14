@@ -14,6 +14,7 @@ import { Dialog } from 'primereact/dialog';
 import { Divider } from 'primereact/divider';
 import { Toast } from 'primereact/toast';
 import { RescheduleModal, ValidateTentativeDateResult } from '@/components/RescheduleModal';
+import { CapacityTracker } from '@/components/CapacityTracker';
 
 interface TokenPayload {
     first_name?: string;
@@ -469,8 +470,17 @@ const Dashboard = () => {
 
                 {/* Header */}
                 <div className="surface-ground border-round-lg p-3 md:p-4">
-                    <div className="flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                        <div className="text-2xl font-bold text-900">Hola, {displayName} </div>
+                    {/* Row 1: name + tags + help button */}
+                    <div className="flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div className="flex align-items-center flex-wrap gap-2">
+                            <div className="text-2xl font-bold text-900">Hola, {displayName}</div>
+                            <div className="flex flex-wrap gap-2">
+                                <Tag value={`Total: ${totalItems}`} icon="pi pi-list" style={{ backgroundColor: '#E5E7EB', color: '#374151' }} />
+                                {groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
+                                {groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
+                                {groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
+                            </div>
+                        </div>
                         <Button
                             type="button"
                             text
@@ -482,7 +492,7 @@ const Dashboard = () => {
                     </div>
 
                     {isHelpOpen && (
-                        <div className="mt-2 mb-3 p-3 surface-card border-1 border-round" style={{ borderColor: 'var(--surface-border)' }}>
+                        <div className="mb-3 p-3 surface-card border-1 border-round" style={{ borderColor: 'var(--surface-border)' }}>
                             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }} className="flex flex-column gap-2 text-600 text-sm line-height-3">
                                 <li><strong>🔴 Vencidas:</strong> subtareas cuya fecha límite ya expiró.</li>
                                 <li><strong>🟢 Para hoy:</strong> subtareas que vencen en lo que resta del día.</li>
@@ -495,12 +505,8 @@ const Dashboard = () => {
                         </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2">
-                        <Tag value={`Total: ${totalItems}`} icon="pi pi-list" style={{ backgroundColor: '#E5E7EB', color: '#374151' }} />
-                        {groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
-                        {groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
-                        {groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
-                    </div>
+                    {/* Row 2: capacity tracker */}
+                    <CapacityTracker />
                 </div>
 
                 {error && <div className="p-3 border-round bg-red-50 text-red-600 font-medium">{error}</div>}
