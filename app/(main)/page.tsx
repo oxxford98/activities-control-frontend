@@ -392,7 +392,7 @@ const Dashboard = () => {
                     {item.estimated_time != null && (
                         <span className="flex align-items-center gap-1 text-xs text-500">
                             <i className="pi pi-clock" style={{ fontSize: '0.7rem' }} />
-                            {item.estimated_time} min
+                            {item.estimated_time} horas
                         </span>
                     )}
                     <span className="flex align-items-center gap-1 text-xs text-400">

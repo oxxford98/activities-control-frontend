@@ -135,7 +135,7 @@ export function RescheduleModal({
                     {estimatedTime != null && (
                         <div className="flex align-items-center gap-1 text-500 text-sm mt-1">
                             <i className="pi pi-clock" style={{ fontSize: '0.75rem' }} />
-                            <span>Duración estimada: {estimatedTime} min</span>
+                            <span>Duración estimada: {estimatedTime} horas</span>
                         </div>
                     )}
                     {currentDate && (
@@ -179,7 +179,7 @@ export function RescheduleModal({
                         <div>
                             <div className="font-semibold" style={{ color: '#166534' }}>Fecha disponible</div>
                             <div className="text-sm mt-1" style={{ color: '#15803D' }}>
-                                Carga del día: {validation.current_load}h / {validation.limit}h máx.
+                                La carga del día quedaría en {validation.current_load} h de {validation.limit} h máx.
                             </div>
                         </div>
                     </div>
@@ -215,7 +215,7 @@ export function RescheduleModal({
                                                     className="text-xs font-semibold"
                                                     style={{ color: '#991B1B' }}
                                                 >
-                                                    Carga del día
+                                                    Carga estimada del día
                                                 </div>
                                                 <div
                                                     className="text-xl font-bold mt-1"
@@ -308,7 +308,7 @@ export function RescheduleModal({
                                                                 className="text-sm font-medium"
                                                                 style={{ color: '#16A34A' }}
                                                             >
-                                                                Carga: {s.current_load}h
+                                                                Carga estimada: {s.current_load}h
                                                             </span>
                                                         </div>
                                                     </div>
