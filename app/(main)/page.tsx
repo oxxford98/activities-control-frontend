@@ -470,7 +470,7 @@ const Dashboard = () => {
                 {/* Header */}
                 <div className="surface-ground border-round-lg p-3 md:p-4">
                     <div className="flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                        <div className="text-2xl font-bold text-900">Hola, {displayName} </div>
+                        <div className="text-2xl font-bold text-900">Hola usuario, {displayName} </div>
                         <Button
                             type="button"
                             text
