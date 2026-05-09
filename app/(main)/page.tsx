@@ -38,6 +38,7 @@ interface TodayActivityItem {
     event_date?: string | null;
     activity_name?: string;
     activity?: number;
+    notes?: string[] | null;
     [key: string]: any;
 }
 
@@ -50,6 +51,8 @@ interface ActivityDetail {
     event_date?: string | null;
     deadline?: string | null;
     grade?: number | null;
+    total_subactivities?: number;
+    total_completed?: number;
     [key: string]: any;
 }
 
@@ -142,6 +145,15 @@ const Dashboard = () => {
     const [rescheduleItem, setRescheduleItem] = useState<TodayActivityItem | null>(null);
     const [rescheduleVisible, setRescheduleVisible] = useState(false);
 
+    // Status tab: 0=activas, 1=pospuestas, 2=finalizadas
+    const [statusSubactivity, setStatusSubactivity] = useState(0);
+    const [flatItems, setFlatItems] = useState<TodayActivityItem[]>([]);
+
+    // Postpone modal
+    const [postponeItem, setPostponeItem] = useState<TodayActivityItem | null>(null);
+    const [postponeVisible, setPostponeVisible] = useState(false);
+    const [postponeNote, setPostponeNote] = useState('');
+
     const formatDateTime = (value: string | null | undefined) => {
         if (!value) return '-';
         const parsedDate = new Date(value);
@@ -173,16 +185,16 @@ const Dashboard = () => {
     const taskTitle = (item: TodayActivityItem): string =>
         String(item.title || item.name || '-');
 
-    const buildTodayRequestUrl = (currentFilters: TodayFilters): string => {
+    const buildTodayRequestUrl = (currentFilters: TodayFilters, currentStatus: number): string => {
         const params = new URLSearchParams();
+        params.set('status_subactivity', String(currentStatus));
         if (currentFilters.estimated_time.trim()) params.set('estimated_time', currentFilters.estimated_time.trim());
         if (currentFilters.type_activity.trim()) params.set('type_activity', currentFilters.type_activity.trim());
         if (currentFilters.subject.trim()) params.set('subject', currentFilters.subject.trim());
-        const queryString = params.toString();
-        return `${process.env.NEXT_PUBLIC_API_URL}/today/${queryString ? `?${queryString}` : ''}`;
+        return `${process.env.NEXT_PUBLIC_API_URL}/today/?${params.toString()}`;
     };
 
-    const fetchToday = async (currentFilters: TodayFilters = filters) => {
+    const fetchToday = async (currentFilters: TodayFilters = filters, currentStatus: number = statusSubactivity) => {
         const validToken = await validateAndRefreshToken();
         if (!validToken) {
             router.replace(ROUTES.AUTH.LOGIN);
@@ -192,19 +204,32 @@ const Dashboard = () => {
         setLoading(true);
         setError('');
         try {
-            const response = await fetch(buildTodayRequestUrl(currentFilters), {
+            const response = await fetch(buildTodayRequestUrl(currentFilters, currentStatus), {
                 headers: { Authorization: authorizationHeader }
             });
             if (!response.ok) throw new Error('No se pudieron cargar las actividades de hoy.');
             const data = (await response.json()) as TodayResponse;
-            setGroupedItems({
-                overdue: [...(Array.isArray(data?.expired) ? data.expired : [])].sort(sortByDateThenEffort),
-                today: [...(Array.isArray(data?.today) ? data.today : [])].sort(sortByDateThenEffort),
-                upcoming: [...(Array.isArray(data?.upcoming) ? data.upcoming : [])].sort(sortByDateThenEffort)
-            });
+            if (currentStatus === 0) {
+                setGroupedItems({
+                    overdue: [...(Array.isArray(data?.expired) ? data.expired : [])].sort(sortByDateThenEffort),
+                    today: [...(Array.isArray(data?.today) ? data.today : [])].sort(sortByDateThenEffort),
+                    upcoming: [...(Array.isArray(data?.upcoming) ? data.upcoming : [])].sort(sortByDateThenEffort)
+                });
+            } else {
+                const all = [
+                    ...(Array.isArray(data?.expired) ? data.expired : []),
+                    ...(Array.isArray(data?.today) ? data.today : []),
+                    ...(Array.isArray(data?.upcoming) ? data.upcoming : [])
+                ].sort(sortByDateThenEffort);
+                setFlatItems(all);
+            }
         } catch (fetchError: any) {
             setError(fetchError.message || 'Error al cargar actividades del dashboard.');
-            setGroupedItems({ overdue: [], today: [], upcoming: [] });
+            if (currentStatus === 0) {
+                setGroupedItems({ overdue: [], today: [], upcoming: [] });
+            } else {
+                setFlatItems([]);
+            }
         } finally {
             setLoading(false);
         }
@@ -271,7 +296,7 @@ const Dashboard = () => {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${subActivityId}/`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ target_date: newDate })
+            body: JSON.stringify({ target_date: newDate, status_subactivity: 0 })
         });
 
         if (!response.ok) {
@@ -302,15 +327,67 @@ const Dashboard = () => {
         fetchToday(filters);
     };
 
-    const applyFilters = () => fetchToday(filters);
+    const applyFilters = () => fetchToday(filters, statusSubactivity);
 
     const clearFilters = () => {
         const emptyFilters: TodayFilters = { estimated_time: '', type_activity: '', subject: '' };
         setFilters(emptyFilters);
-        fetchToday(emptyFilters);
+        fetchToday(emptyFilters, statusSubactivity);
     };
 
-    const totalItems = groupedItems.overdue.length + groupedItems.today.length + groupedItems.upcoming.length;
+    const handleTabChange = (newStatus: number) => {
+        setStatusSubactivity(newStatus);
+        fetchToday(filters, newStatus);
+    };
+
+    const handleMarkAsDone = async (e: React.MouseEvent, item: TodayActivityItem) => {
+        e.stopPropagation();
+        const token = getSessionToken();
+        if (!token || !item.id) return;
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${item.id}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ status_subactivity: 2 })
+            });
+            if (!response.ok) throw new Error('No se pudo marcar como hecha.');
+            toastRef.current?.show({ severity: 'success', summary: 'Hecha', detail: 'Subtarea marcada como finalizada.', life: 3000 });
+            fetchToday(filters, statusSubactivity);
+        } catch (err: any) {
+            toastRef.current?.show({ severity: 'error', summary: 'Error', detail: err.message || 'No se pudo actualizar.', life: 4000 });
+        }
+    };
+
+    const handleOpenPostpone = (e: React.MouseEvent, item: TodayActivityItem) => {
+        e.stopPropagation();
+        setPostponeItem(item);
+        setPostponeNote('');
+        setPostponeVisible(true);
+    };
+
+    const handleConfirmPostpone = async () => {
+        const token = getSessionToken();
+        if (!token || !postponeItem?.id) return;
+        try {
+            const notes = postponeNote.trim() ? [postponeNote.trim()] : [];
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sub-activities/${postponeItem.id}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ status_subactivity: 1, notes })
+            });
+            if (!response.ok) throw new Error('No se pudo posponer la subtarea.');
+            toastRef.current?.show({ severity: 'info', summary: 'Pospuesta', detail: 'Subtarea pospuesta correctamente.', life: 3000 });
+            setPostponeVisible(false);
+            setPostponeItem(null);
+            fetchToday(filters, statusSubactivity);
+        } catch (err: any) {
+            toastRef.current?.show({ severity: 'error', summary: 'Error', detail: err.message || 'No se pudo posponer.', life: 4000 });
+        }
+    };
+
+    const totalItems = statusSubactivity === 0
+        ? groupedItems.overdue.length + groupedItems.today.length + groupedItems.upcoming.length
+        : flatItems.length;
     const hasActiveFilters = Boolean(filters.estimated_time.trim() || filters.type_activity.trim() || filters.subject.trim());
 
     useEffect(() => {
@@ -381,6 +458,18 @@ const Dashboard = () => {
                         {item.description}
                     </div>
                 )}
+
+                {/* Notes */}
+                {Array.isArray(item.notes) && item.notes.length > 0 && (
+                    <div className="mt-2 flex flex-column gap-1">
+                        {item.notes.map((note, i) => (
+                            <div key={i} className="flex gap-2 align-items-start p-2 border-round" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                                <i className="pi pi-comment" style={{ fontSize: '0.75rem', color: '#F97316', marginTop: '0.1rem', flexShrink: 0 }} />
+                                <span className="text-xs text-700" style={{ fontStyle: 'italic' }}>&ldquo;{note}&rdquo;</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Footer */}
@@ -401,18 +490,183 @@ const Dashboard = () => {
                     </span>
                 </div>
 
-                <Button
-                    type="button"
-                    label="Reprogramar"
-                    icon="pi pi-calendar-plus"
-                    size="small"
-                    text
-                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.45rem' }}
-                    onClick={(e) => handleOpenReschedule(e, item)}
-                />
+                <div className="flex gap-1">
+                    <Button
+                        type="button"
+                        icon="pi pi-calendar-plus"
+                        size="small"
+                        text
+                        tooltip="Reprogramar"
+                        tooltipOptions={{ position: 'top' }}
+                        style={{ width: '2rem', height: '2rem' }}
+                        onClick={(e) => handleOpenReschedule(e, item)}
+                    />
+                    <Button
+                        type="button"
+                        icon="pi pi-hourglass"
+                        size="small"
+                        text
+                        severity="warning"
+                        tooltip="Posponer"
+                        tooltipOptions={{ position: 'top' }}
+                        style={{ width: '2rem', height: '2rem' }}
+                        onClick={(e) => handleOpenPostpone(e, item)}
+                    />
+                    <Button
+                        type="button"
+                        icon="pi pi-check-circle"
+                        size="small"
+                        text
+                        severity="success"
+                        tooltip="Marcar como hecha"
+                        tooltipOptions={{ position: 'top' }}
+                        style={{ width: '2rem', height: '2rem' }}
+                        onClick={(e) => handleMarkAsDone(e, item)}
+                    />
+                </div>
             </div>
         </div>
     );
+
+    const renderFlatCard = (item: TodayActivityItem, index: number) => {
+        const isPostponed = statusSubactivity === 1;
+        const accentColor = isPostponed ? '#F97316' : '#22C55E';
+        return (
+            <div
+                key={item.id ?? index}
+                className="surface-card border-round-lg cursor-pointer"
+                style={{
+                    border: '1px solid #E2E8F0',
+                    borderLeft: `4px solid ${accentColor}`,
+                    transition: 'box-shadow 0.15s ease, transform 0.1s ease'
+                }}
+                onClick={() => handleCardClick(item)}
+                onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
+                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                    (e.currentTarget as HTMLDivElement).style.transform = 'none';
+                }}
+            >
+                <div className="p-3">
+                    {/* Context row */}
+                    {(item.subject || item.type_activity) && (
+                        <div className="flex align-items-center gap-1 mb-2">
+                            <i className="pi pi-book" style={{ fontSize: '0.65rem', color: accentColor }} />
+                            {item.subject && (
+                                <span className="text-xs font-medium text-500 overflow-hidden text-overflow-ellipsis white-space-nowrap" style={{ maxWidth: '9rem' }}>
+                                    {item.subject}
+                                </span>
+                            )}
+                            {item.subject && item.type_activity && <span className="text-300 text-xs">•</span>}
+                            {item.type_activity && <span className="text-xs text-500">{item.type_activity}</span>}
+                        </div>
+                    )}
+
+                    {/* Title */}
+                    <div className="font-bold text-900 line-height-2 mb-1" style={{ fontSize: '0.875rem' }}>
+                        {taskTitle(item)}
+                    </div>
+
+                    {/* Description */}
+                    {item.description && (
+                        <div
+                            className="text-500 text-xs line-height-3"
+                            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden' }}
+                        >
+                            {item.description}
+                        </div>
+                    )}
+
+                    {/* Notes */}
+                    {Array.isArray(item.notes) && item.notes.length > 0 && (
+                        <div className="mt-2 flex flex-column gap-1">
+                            {item.notes.map((note, i) => (
+                                <div key={i} className="flex gap-2 align-items-start p-2 border-round" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                                    <i className="pi pi-comment" style={{ fontSize: '0.75rem', color: '#F97316', marginTop: '0.1rem', flexShrink: 0 }} />
+                                    <span className="text-xs text-700" style={{ fontStyle: 'italic' }}>&ldquo;{note}&rdquo;</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex justify-content-between align-items-center px-3 pb-2 pt-2" style={{ borderTop: '1px solid #F1F5F9' }}>
+                    <div className="flex flex-column gap-1">
+                        {item.estimated_time != null && (
+                            <span className="flex align-items-center gap-1 text-xs text-500">
+                                <i className="pi pi-clock" style={{ fontSize: '0.7rem' }} />
+                                {item.estimated_time} horas
+                            </span>
+                        )}
+                        <span className="flex align-items-center gap-1 text-xs text-400">
+                            <i className="pi pi-calendar" style={{ fontSize: '0.7rem' }} />
+                            {formatDateTime(item.target_date || item.deadline || item.event_date)}
+                        </span>
+                    </div>
+
+                    {isPostponed && (
+                        <Button
+                            type="button"
+                            label="Reprogramar"
+                            icon="pi pi-calendar-plus"
+                            size="small"
+                            text
+                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.45rem' }}
+                            onClick={(e) => handleOpenReschedule(e, item)}
+                        />
+                    )}
+                    {statusSubactivity === 2 && (
+                        <span className="flex align-items-center gap-1 text-xs font-medium" style={{ color: '#22C55E' }}>
+                            <i className="pi pi-check-circle" style={{ fontSize: '0.8rem' }} /> Finalizada
+                        </span>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderFlatGrid = () => {
+        if (loading) {
+            return (
+                <div className="grid">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                        <div key={i} className="col-12 md:col-6 lg:col-4">
+                            <div className="surface-card border-round-lg p-3" style={{ border: '1px solid var(--surface-border)' }}>
+                                <div className="flex flex-column gap-2">
+                                    <div className="border-round" style={{ height: '0.6rem', backgroundColor: 'var(--surface-border)', width: '45%' }} />
+                                    <div className="border-round" style={{ height: '0.85rem', backgroundColor: 'var(--surface-border)', width: '78%' }} />
+                                    <div className="border-round" style={{ height: '0.65rem', backgroundColor: 'var(--surface-border)', width: '60%' }} />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        if (flatItems.length === 0) {
+            return (
+                <div className="flex flex-column align-items-center justify-content-center text-center gap-3 py-6">
+                    <i className="pi pi-inbox" style={{ fontSize: '2.5rem', color: '#9CA3AF' }} />
+                    <span className="text-600 text-sm">
+                        {statusSubactivity === 1 ? 'No hay subtareas pospuestas.' : 'No hay subtareas finalizadas.'}
+                    </span>
+                </div>
+            );
+        }
+        return (
+            <div className="grid">
+                {flatItems.map((item, index) => (
+                    <div key={item.id ?? index} className="col-12 md:col-6 lg:col-4">
+                        {renderFlatCard(item, index)}
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
     const renderColumn = (col: typeof COLUMNS[number]) => {
         const items = groupedItems[col.key];
@@ -476,9 +730,9 @@ const Dashboard = () => {
                             <div className="text-2xl font-bold text-900">Hola, {displayName}</div>
                             <div className="flex flex-wrap gap-2">
                                 <Tag value={`Total: ${totalItems}`} icon="pi pi-list" style={{ backgroundColor: '#E5E7EB', color: '#374151' }} />
-                                {groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
-                                {groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
-                                {groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
+                                {statusSubactivity === 0 && groupedItems.overdue.length > 0 && <Tag value={`Vencidas: ${groupedItems.overdue.length}`} severity="danger" />}
+                                {statusSubactivity === 0 && groupedItems.today.length > 0 && <Tag value={`Hoy: ${groupedItems.today.length}`} severity="success" />}
+                                {statusSubactivity === 0 && groupedItems.upcoming.length > 0 && <Tag value={`Próximas: ${groupedItems.upcoming.length}`} severity="info" />}
                             </div>
                         </div>
                         <Button
@@ -511,65 +765,157 @@ const Dashboard = () => {
 
                 {error && <div className="p-3 border-round bg-red-50 text-red-600 font-medium">{error}</div>}
 
-                {/* Filters */}
-                <div className="surface-card border-1 border-round-lg p-3 md:p-4" style={{ borderColor: 'var(--surface-border)' }}>
-                    <div className="flex align-items-center justify-content-between gap-3 flex-wrap">
-                        <Button
-                            type="button"
-                            text
-                            icon={`pi ${isFiltersOpen ? 'pi-chevron-down' : 'pi-chevron-right'}`}
-                            iconPos="right"
-                            onClick={() => setIsFiltersOpen(prev => !prev)}
-                            className="p-0"
-                            label="Filtros"
-                        />
-                        <div className="flex align-items-center gap-2">
-                            <i className="pi pi-filter text-600" />
-                            {hasActiveFilters && <span className="text-sm text-primary font-medium">Filtros activos</span>}
+                {/* Unified Toolbar: tabs + filters */}
+                <div
+                    className="surface-card border-1 border-round-xl"
+                    style={{ borderColor: 'var(--surface-border)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                >
+                    <div className="flex align-items-center justify-content-between flex-wrap gap-2 p-2">
+                        {/* Status tabs */}
+                        <div className="flex gap-1 overflow-x-auto">
+                            {([
+                                { label: 'Activas', value: 0 as const, icon: 'pi-play', count: groupedItems.overdue.length + groupedItems.today.length + groupedItems.upcoming.length },
+                                { label: 'Pospuestas', value: 1 as const, icon: 'pi-hourglass', count: statusSubactivity === 1 ? flatItems.length : 0 },
+                                { label: 'Finalizadas', value: 2 as const, icon: 'pi-check-circle', count: statusSubactivity === 2 ? flatItems.length : 0 }
+                            ]).map(tab => {
+                                const isActive = statusSubactivity === tab.value;
+                                return (
+                                    <button
+                                        key={tab.value}
+                                        type="button"
+                                        onClick={() => handleTabChange(tab.value)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.4rem',
+                                            whiteSpace: 'nowrap',
+                                            border: isActive ? '1px solid #C7D2FE' : '1px solid transparent',
+                                            borderRadius: '0.5rem',
+                                            padding: '0.45rem 0.85rem',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 500,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            backgroundColor: isActive ? '#EEF2FF' : 'transparent',
+                                            color: isActive ? '#4338CA' : 'var(--text-color-secondary)'
+                                        }}
+                                    >
+                                        <i
+                                            className={`pi ${tab.icon}`}
+                                            style={{ fontSize: '0.8rem', color: isActive ? '#4F46E5' : 'var(--text-color-secondary)' }}
+                                        />
+                                        {tab.label}
+                                        <span
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                minWidth: '1.25rem',
+                                                height: '1.25rem',
+                                                padding: '0 0.3rem',
+                                                borderRadius: '999px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 600,
+                                                backgroundColor: isActive ? '#E0E7FF' : 'var(--surface-border)',
+                                                color: isActive ? '#4338CA' : 'var(--text-color-secondary)'
+                                            }}
+                                        >
+                                            {tab.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
+
+                        {/* Filters toggle button */}
+                        <button
+                            type="button"
+                            onClick={() => setIsFiltersOpen(prev => !prev)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                border: '1px solid var(--surface-border)',
+                                borderRadius: '0.5rem',
+                                padding: '0.45rem 0.85rem',
+                                fontSize: '0.85rem',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                backgroundColor: 'var(--surface-card)',
+                                color: 'var(--text-color)',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <span style={{ color: '#4F46E5', fontWeight: 600 }}>Filtros</span>
+                            {hasActiveFilters && (
+                                <span
+                                    style={{
+                                        width: '0.45rem',
+                                        height: '0.45rem',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#4F46E5',
+                                        flexShrink: 0
+                                    }}
+                                />
+                            )}
+                            <span style={{ width: '1px', height: '1rem', backgroundColor: 'var(--surface-border)', margin: '0 0.1rem' }} />
+                            <i
+                                className={`pi ${isFiltersOpen ? 'pi-chevron-up' : 'pi-chevron-down'}`}
+                                style={{ fontSize: '0.75rem', color: '#4F46E5' }}
+                            />
+                            <i className="pi pi-filter" style={{ fontSize: '0.8rem', color: 'var(--text-color-secondary)' }} />
+                        </button>
                     </div>
 
+                    {/* Expandable filter panel */}
                     {isFiltersOpen && (
-                        <div className="grid mt-2">
-                            <div className="col-12 md:col-3">
-                                <label className="block mb-2 font-medium text-sm">Esfuerzo estimado</label>
-                                <InputText value={filters.estimated_time} onChange={(e) => setFilters(prev => ({ ...prev, estimated_time: e.target.value }))} placeholder="Ej: 2" className="w-full" />
-                            </div>
-                            <div className="col-12 md:col-3">
-                                <label className="block mb-2 font-medium text-sm">Tipo de actividad</label>
-                                <Dropdown value={filters.type_activity} onChange={(e) => setFilters(prev => ({ ...prev, type_activity: e.value }))} options={ACTIVITY_TYPE_OPTIONS} placeholder="Seleccione tipo" className="w-full" />
-                            </div>
-                            <div className="col-12 md:col-3">
-                                <label className="block mb-2 font-medium text-sm">Materia</label>
-                                <InputText value={filters.subject} onChange={(e) => setFilters(prev => ({ ...prev, subject: e.target.value }))} placeholder="Ej: Cálculo" className="w-full" />
-                            </div>
-                            <div className="col-12 md:col-3 flex align-items-end gap-2">
-                                <Button label="Aplicar" icon="pi pi-search" onClick={applyFilters} loading={loading} className="w-full md:w-auto" />
-                                <Button label="Limpiar" icon="pi pi-times" severity="secondary" outlined onClick={clearFilters} disabled={loading} className="w-full md:w-auto" />
+                        <div className="p-3" style={{ borderTop: '1px solid var(--surface-border)' }}>
+                            <div className="grid">
+                                <div className="col-12 md:col-3">
+                                    <label className="block mb-2 font-medium text-sm">Esfuerzo estimado</label>
+                                    <InputText value={filters.estimated_time} onChange={(e) => setFilters(prev => ({ ...prev, estimated_time: e.target.value }))} placeholder="Ej: 2" className="w-full" />
+                                </div>
+                                <div className="col-12 md:col-3">
+                                    <label className="block mb-2 font-medium text-sm">Tipo de actividad</label>
+                                    <Dropdown value={filters.type_activity} onChange={(e) => setFilters(prev => ({ ...prev, type_activity: e.value }))} options={ACTIVITY_TYPE_OPTIONS} placeholder="Seleccione tipo" className="w-full" />
+                                </div>
+                                <div className="col-12 md:col-3">
+                                    <label className="block mb-2 font-medium text-sm">Materia</label>
+                                    <InputText value={filters.subject} onChange={(e) => setFilters(prev => ({ ...prev, subject: e.target.value }))} placeholder="Ej: Cálculo" className="w-full" />
+                                </div>
+                                <div className="col-12 md:col-3 flex align-items-end gap-2">
+                                    <Button label="Aplicar" icon="pi pi-search" onClick={applyFilters} loading={loading} className="w-full md:w-auto" />
+                                    <Button label="Limpiar" icon="pi pi-times" severity="secondary" outlined onClick={clearFilters} disabled={loading} className="w-full md:w-auto" />
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* Content: empty state OR kanban */}
-                {!loading && totalItems === 0 ? (
-                    <div className="flex flex-column align-items-center justify-content-center text-center gap-4 py-6">
-                        <div className="flex align-items-center justify-content-center border-circle" style={{ width: '6rem', height: '6rem', backgroundColor: '#F3F4F6' }}>
-                            <i className="pi pi-check-circle" style={{ fontSize: '3rem', color: '#9CA3AF' }} />
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold text-700 mb-2">¡Todo al día!</div>
-                            <div className="text-600 line-height-3" style={{ maxWidth: '24rem' }}>
-                                No tienes subtareas vencidas ni programadas para los próximos {NEXT_DAYS_WINDOW} días.
-                                Crea una actividad y empieza a organizar tu tiempo.
+                {/* Content: kanban for status 0, flat grid for status 1/2 */}
+                {statusSubactivity === 0 ? (
+                    !loading && totalItems === 0 ? (
+                        <div className="flex flex-column align-items-center justify-content-center text-center gap-4 py-6">
+                            <div className="flex align-items-center justify-content-center border-circle" style={{ width: '6rem', height: '6rem', backgroundColor: '#F3F4F6' }}>
+                                <i className="pi pi-check-circle" style={{ fontSize: '3rem', color: '#9CA3AF' }} />
                             </div>
+                            <div>
+                                <div className="text-2xl font-bold text-700 mb-2">¡Todo al día!</div>
+                                <div className="text-600 line-height-3" style={{ maxWidth: '24rem' }}>
+                                    No tienes subtareas vencidas ni programadas para los próximos {NEXT_DAYS_WINDOW} días.
+                                    Crea una actividad y empieza a organizar tu tiempo.
+                                </div>
+                            </div>
+                            <Button label="Crear actividad" icon="pi pi-plus" size="large" onClick={() => router.push('/activities/crear')} />
                         </div>
-                        <Button label="Crear actividad" icon="pi pi-plus" size="large" onClick={() => router.push('/activities/crear')} />
-                    </div>
+                    ) : (
+                        <div className="flex gap-3" style={{ overflowX: 'auto', alignItems: 'flex-start' }}>
+                            {COLUMNS.map(col => renderColumn(col))}
+                        </div>
+                    )
                 ) : (
-                    <div className="flex gap-3" style={{ overflowX: 'auto', alignItems: 'flex-start' }}>
-                        {COLUMNS.map(col => renderColumn(col))}
-                    </div>
+                    renderFlatGrid()
                 )}
             </div>
 
@@ -607,6 +953,34 @@ const Dashboard = () => {
                                 <div className="text-600 text-sm line-height-3 mt-2">{activityDetail.description}</div>
                             )}
                         </div>
+
+                        {/* Progress bar */}
+                        {activityDetail.total_subactivities != null && (
+                            <div className="p-3 border-round" style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--surface-border)' }}>
+                                <div className="flex justify-content-between align-items-end mb-2">
+                                    <span className="text-xs font-semibold text-500" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progreso</span>
+                                    <span className="text-sm font-bold text-primary">
+                                        {activityDetail.total_subactivities > 0
+                                            ? Math.round(((activityDetail.total_completed ?? 0) / activityDetail.total_subactivities) * 100)
+                                            : 0}%
+                                    </span>
+                                </div>
+                                <div className="w-full border-round" style={{ height: '0.6rem', backgroundColor: 'var(--surface-border)', overflow: 'hidden' }}>
+                                    <div
+                                        className="border-round"
+                                        style={{
+                                            height: '100%',
+                                            width: `${activityDetail.total_subactivities > 0 ? Math.round(((activityDetail.total_completed ?? 0) / activityDetail.total_subactivities) * 100) : 0}%`,
+                                            backgroundColor: 'var(--primary-color)',
+                                            transition: 'width 0.5s ease'
+                                        }}
+                                    />
+                                </div>
+                                <div className="text-xs text-400 text-right mt-1">
+                                    {activityDetail.total_completed ?? 0} de {activityDetail.total_subactivities} subtareas completadas
+                                </div>
+                            </div>
+                        )}
 
                         <Divider className="my-0" />
 
@@ -676,6 +1050,37 @@ const Dashboard = () => {
                 onValidate={handleValidateTentativeDate}
                 onSave={handleSaveReschedule}
             />
+
+            {/* Postpone Modal */}
+            <Dialog
+                header="Posponer subtarea"
+                visible={postponeVisible}
+                onHide={() => { setPostponeVisible(false); setPostponeItem(null); }}
+                style={{ width: '26rem', maxWidth: '95vw' }}
+                modal
+                draggable={false}
+            >
+                <div className="flex flex-column gap-3">
+                    <div className="text-600 text-sm">
+                        ¿Por qué necesitas posponer <strong>&ldquo;{taskTitle(postponeItem ?? {})}&rdquo;</strong>?
+                    </div>
+                    <div>
+                        <label className="block mb-2 font-medium text-sm">Nota (opcional pero recomendada)</label>
+                        <textarea
+                            className="w-full border-1 border-round p-3 text-sm"
+                            style={{ minHeight: '6rem', resize: 'none', outline: 'none', borderColor: 'var(--surface-border)', fontFamily: 'inherit' }}
+                            placeholder="Ej: Aún estoy esperando respuesta del profesor..."
+                            value={postponeNote}
+                            onChange={(e) => setPostponeNote(e.target.value)}
+                        />
+                        <span className="text-xs text-400">La nota quedará guardada junto a la subtarea.</span>
+                    </div>
+                    <div className="flex justify-content-end gap-2 pt-1">
+                        <Button label="Cancelar" severity="secondary" outlined onClick={() => { setPostponeVisible(false); setPostponeItem(null); }} />
+                        <Button label="Posponer" icon="pi pi-hourglass" severity="warning" onClick={handleConfirmPostpone} />
+                    </div>
+                </div>
+            </Dialog>
         </Card>
     );
 };
