@@ -1,5 +1,4 @@
 'use client';
-import { useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { Ripple } from 'primereact/ripple';
@@ -29,9 +28,10 @@ const AppMenuitemHooks = ({ item, keyValue, setActiveMenu }: { item: any, keyVal
 
 const AppMenuitem = (props: AppMenuItemProps) => {
     const { activeMenu, setActiveMenu } = useContext(MenuContext);
+    const pathname = usePathname();
     const item = props.item;
     const key = props.parentKey ? props.parentKey + '-' + props.index : String(props.index);
-    const isActiveRoute = item!.to && usePathname() === item!.to; // usePathname solo para el render, no para efectos
+    const isActiveRoute = Boolean(item!.to && pathname === item!.to);
     const active = activeMenu === key || activeMenu.startsWith(key + '-');
 
     const itemClick = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
