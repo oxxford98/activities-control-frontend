@@ -1,554 +1,272 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
-import React, { useContext, useRef, useState } from 'react';
-import Link from 'next/link';
 
-import { StyleClass } from 'primereact/styleclass';
+import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from 'primereact/button';
-import { Ripple } from 'primereact/ripple';
 import { Divider } from 'primereact/divider';
-import { LayoutContext } from '../../../layout/context/layoutcontext';
-import { NodeRef } from '@/types';
-import { classNames } from 'primereact/utils';
+import { Tag } from 'primereact/tag';
+import { ROUTES } from '@/lib/routes';
+
+const features = [
+    {
+        icon: 'pi-calendar',
+        title: 'Agenda centralizada',
+        description: 'Consulta exámenes, talleres y entregas desde un solo tablero con fechas claras y priorización visual.'
+    },
+    {
+        icon: 'pi-refresh',
+        title: 'Reprograma sin perder contexto',
+        description: 'Mueve actividades, conserva notas y actualiza el plan sin tener que rehacer todo desde cero.'
+    },
+    {
+        icon: 'pi-chart-line',
+        title: 'Carga y capacidad visibles',
+        description: 'Detecta cuellos de botella antes de que se conviertan en atraso y reparte mejor el tiempo disponible.'
+    }
+];
+
+const steps = [
+    {
+        number: '01',
+        title: 'Ingresa tus actividades',
+        description: 'Registra materias, fechas y subtareas con la información mínima que ya manejas.'
+    },
+    {
+        number: '02',
+        title: 'Prioriza según urgencia',
+        description: 'Visualiza lo vencido, lo de hoy y lo próximo para tomar decisiones más rápido.'
+    },
+    {
+        number: '03',
+        title: 'Ajusta el plan en segundos',
+        description: 'Reagenda cuando cambien los plazos sin perder control del avance real.'
+    }
+];
 
 const LandingPage = () => {
-    const [isHidden, setIsHidden] = useState(false);
-    const { layoutConfig } = useContext(LayoutContext);
-    const menuRef = useRef<HTMLElement | null>(null);
+    const router = useRouter();
 
-    const toggleMenuItemClick = () => {
-        setIsHidden((prevState) => !prevState);
-    };
+    const goToLogin = () => router.push(ROUTES.AUTH.LOGIN);
+    const goToRegister = () => router.push(ROUTES.AUTH.REGISTER);
 
     return (
-        <div className="surface-0 flex justify-content-center">
-            <div id="home" className="landing-wrapper overflow-hidden">
-                <div className="py-4 px-4 mx-0 md:mx-6 lg:mx-8 lg:px-8 flex align-items-center justify-content-between relative lg:static">
-                    <Link href="/" className="flex align-items-center">
-                        <img src={`/layout/images/${layoutConfig.colorScheme === 'light' ? 'logo-dark' : 'logo-white'}.svg`} alt="Sakai Logo" height="50" className="mr-0 lg:mr-2" />
-                        <span className="text-900 font-medium text-2xl line-height-3 mr-8">SAKAI</span>
-                    </Link>
-                    <StyleClass nodeRef={menuRef as NodeRef} selector="@next" enterClassName="hidden" leaveToClassName="hidden" hideOnOutsideClick>
-                        <i ref={menuRef} className="pi pi-bars text-4xl cursor-pointer block lg:hidden text-700"></i>
-                    </StyleClass>
-                    <div className={classNames('align-items-center surface-0 flex-grow-1 justify-content-between hidden lg:flex absolute lg:static w-full left-0 px-6 lg:px-0 z-2', { hidden: isHidden })} style={{ top: '100%' }}>
-                        <ul className="list-none p-0 m-0 flex lg:align-items-center select-none flex-column lg:flex-row cursor-pointer">
-                            <li>
-                                <a href="#home" onClick={toggleMenuItemClick} className="p-ripple flex m-0 md:ml-5 px-0 py-3 text-900 font-medium line-height-3">
-                                    <span>Home</span>
-                                    <Ripple />
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#features" onClick={toggleMenuItemClick} className="p-ripple flex m-0 md:ml-5 px-0 py-3 text-900 font-medium line-height-3">
-                                    <span>Features</span>
-                                    <Ripple />
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#highlights" onClick={toggleMenuItemClick} className="p-ripple flex m-0 md:ml-5 px-0 py-3 text-900 font-medium line-height-3">
-                                    <span>Highlights</span>
-                                    <Ripple />
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#pricing" onClick={toggleMenuItemClick} className="p-ripple flex m-0 md:ml-5 px-0 py-3 text-900 font-medium line-height-3">
-                                    <span>Pricing</span>
-                                    <Ripple />
-                                </a>
-                            </li>
-                        </ul>
-                        <div className="flex justify-content-between lg:block border-top-1 lg:border-top-none surface-border py-3 lg:py-0 mt-3 lg:mt-0">
-                            <Button label="Login" text rounded className="border-none font-light line-height-2 text-blue-500"></Button>
-                            <Button label="Register" rounded className="border-none ml-5 font-light line-height-2 bg-blue-500 text-white"></Button>
+        <div className="surface-0 text-900 landing-wrapper overflow-hidden">
+            <div
+                className="relative"
+                style={{
+                    background: 'radial-gradient(circle at top left, rgba(69, 104, 220, 0.16), transparent 36%), radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 30%), linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)'
+                }}
+            >
+                <header className="flex align-items-center justify-content-between px-4 py-4 md:px-6 lg:px-8">
+                    <div className="flex align-items-center gap-3">
+                        <img
+                            src="/layout/images/logo.jpg"
+                            alt="PlanificaUni"
+                            height="64"
+                            className="w-auto"
+                            style={{ borderRadius: '14px', objectFit: 'cover' }}
+                        />
+                        <div>
+                            <div className="font-bold text-xl line-height-1">PlanificaUni</div>
+                            <div className="text-600 text-sm">Organización académica clara</div>
                         </div>
                     </div>
-                </div>
 
-                <div
-                    id="hero"
-                    className="flex flex-column pt-4 px-4 lg:px-8 overflow-hidden"
-                    style={{
-                        background: 'linear-gradient(0deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), radial-gradient(77.36% 256.97% at 77.36% 57.52%, #EEEFAF 0%, #C3E3FA 100%)',
-                        clipPath: 'ellipse(150% 87% at 93% 13%)'
-                    }}
-                >
-                    <div className="mx-4 md:mx-8 mt-0 md:mt-4">
-                        <h1 className="text-6xl font-bold text-gray-900 line-height-2">
-                            <span className="font-light block">Eu sem integer</span>eget magna fermentum
-                        </h1>
-                        <p className="font-normal text-2xl line-height-3 md:mt-3 text-gray-700">Sed blandit libero volutpat sed cras. Fames ac turpis egestas integer. Placerat in egestas erat... </p>
-                        <Button type="button" label="Get Started" rounded className="text-xl border-none mt-3 bg-blue-500 font-normal line-height-3 px-3 text-white"></Button>
+                    <div className="hidden md:flex align-items-center gap-4 text-700">
+                        <a href="#features" className="no-underline text-700 font-medium">
+                            Funcionalidades
+                        </a>
+                        <a href="#how-it-works" className="no-underline text-700 font-medium">
+                            Cómo funciona
+                        </a>
+                        <a href="#contact" className="no-underline text-700 font-medium">
+                            Empezar
+                        </a>
                     </div>
-                    <div className="flex justify-content-center md:justify-content-end">
-                        <img src="/demo/images/landing/screen-1.png" alt="Hero Image" className="w-9 md:w-auto" />
+
+                    <div className="flex align-items-center gap-2">
+                        <Button label="Iniciar sesión" text onClick={goToLogin} className="hidden sm:inline-flex" />
+                        <Button label="Crear cuenta" onClick={goToRegister} />
                     </div>
-                </div>
+                </header>
 
-                <div id="features" className="py-4 px-4 lg:px-8 mt-5 mx-0 lg:mx-8">
-                    <div className="grid justify-content-center">
-                        <div className="col-12 text-center mt-8 mb-4">
-                            <h2 className="text-900 font-normal mb-2">Marvelous Features</h2>
-                            <span className="text-600 text-2xl">Placerat in egestas erat...</span>
-                        </div>
+                <main className="px-4 pb-8 md:px-6 lg:px-8">
+                    <section className="grid align-items-center py-6 lg:py-8">
+                        <div className="col-12 lg:col-6 xl:col-5">
+                            <div className="inline-flex align-items-center gap-2 border-round-3xl px-3 py-2 mb-4 surface-card shadow-2">
+                                <i className="pi pi-bolt text-primary" />
+                                <span className="font-medium text-700">Planificación académica sin ruido visual</span>
+                            </div>
 
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(253, 228, 165, 0.2), rgba(187, 199, 205, 0.2)), linear-gradient(180deg, rgba(253, 228, 165, 0.2), rgba(187, 199, 205, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-yellow-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-users text-2xl text-yellow-700"></i>
+                            <h1 className="text-5xl md:text-6xl line-height-1 font-bold mt-0 mb-4" style={{ letterSpacing: '-0.04em' }}>
+                                Controla tus actividades antes de que te controlen a ti.
+                            </h1>
+
+                            <p className="text-xl text-700 line-height-3 mb-5" style={{ maxWidth: '42rem' }}>
+                                Centraliza tareas, exámenes y entregas en una experiencia pensada para estudiantes que necesitan ver qué hacer, cuándo hacerlo y cómo reprogramarlo sin perder contexto.
+                            </p>
+
+                            <div className="flex flex-column sm:flex-row gap-3 mb-5">
+                                <Button label="Entrar a la app" icon="pi pi-arrow-right" iconPos="right" size="large" onClick={goToLogin} />
+                                <Button label="Crear cuenta" severity="secondary" outlined size="large" onClick={goToRegister} />
+                            </div>
+
+                            <div className="grid">
+                                <div className="col-12 sm:col-4">
+                                    <div className="surface-card border-round-3xl p-4 shadow-1 h-full">
+                                        <div className="text-3xl font-bold text-primary mb-1">3 vistas</div>
+                                        <div className="text-600">vencidas, hoy y próximas</div>
                                     </div>
-                                    <h5 className="mb-2 text-900">Easy to Use</h5>
-                                    <span className="text-600">Posuere morbi leo urna molestie.</span>
+                                </div>
+                                <div className="col-12 sm:col-4">
+                                    <div className="surface-card border-round-3xl p-4 shadow-1 h-full">
+                                        <div className="text-3xl font-bold text-primary mb-1">1 clic</div>
+                                        <div className="text-600">para reagendar o posponer</div>
+                                    </div>
+                                </div>
+                                <div className="col-12 sm:col-4">
+                                    <div className="surface-card border-round-3xl p-4 shadow-1 h-full">
+                                        <div className="text-3xl font-bold text-primary mb-1">Tiempo</div>
+                                        <div className="text-600">para enfocarte en ejecutar</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(145,226,237,0.2),rgba(251, 199, 145, 0.2)), linear-gradient(180deg, rgba(253, 228, 165, 0.2), rgba(172, 180, 223, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-cyan-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-palette text-2xl text-cyan-700"></i>
+                        <div className="col-12 lg:col-6 xl:col-7">
+                            <div className="relative ml-auto" style={{ maxWidth: '760px' }}>
+                                <div
+                                    className="absolute"
+                                    style={{
+                                        inset: '12% 10% 16% 14%',
+                                        borderRadius: '2rem',
+                                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(16, 185, 129, 0.14))',
+                                        filter: 'blur(28px)'
+                                    }}
+                                />
+
+                                <div className="relative surface-card border-round-3xl shadow-6 p-4 md:p-5 overflow-hidden">
+                                    <div className="flex align-items-center justify-content-between mb-4">
+                                        <div>
+                                            <div className="text-900 font-bold text-xl">Tablero de hoy</div>
+                                            <div className="text-600">Estado general de actividades y carga</div>
+                                        </div>
+                                        <Tag severity="success" value="Sincronizado" />
                                     </div>
-                                    <h5 className="mb-2 text-900">Fresh Design</h5>
-                                    <span className="text-600">Semper risus in hendrerit.</span>
+
+                                    <div className="grid">
+                                        <div className="col-12 md:col-7">
+                                            <div className="surface-ground border-round-2xl p-4 h-full">
+                                                <div className="flex align-items-center justify-content-between mb-3">
+                                                    <span className="font-semibold">Hoy</span>
+                                                    <span className="text-600 text-sm">4 actividades</span>
+                                                </div>
+                                                <div className="flex flex-column gap-3">
+                                                    <div className="surface-card border-round-2xl p-3 flex align-items-center justify-content-between">
+                                                        <div>
+                                                            <div className="font-medium">Revisión de proyecto</div>
+                                                            <div className="text-600 text-sm">Entrega hoy a las 4:00 p. m.</div>
+                                                        </div>
+                                                        <Tag severity="danger" value="Urgente" />
+                                                    </div>
+                                                    <div className="surface-card border-round-2xl p-3 flex align-items-center justify-content-between">
+                                                        <div>
+                                                            <div className="font-medium">Lectura de investigación</div>
+                                                            <div className="text-600 text-sm">2 horas estimadas</div>
+                                                        </div>
+                                                        <Tag severity="info" value="En curso" />
+                                                    </div>
+                                                    <div className="surface-card border-round-2xl p-3 flex align-items-center justify-content-between">
+                                                        <div>
+                                                            <div className="font-medium">Quiz de cálculo</div>
+                                                            <div className="text-600 text-sm">Mañana temprano</div>
+                                                        </div>
+                                                        <Tag severity="warning" value="Próximo" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="col-12 md:col-5">
+                                            <div className="grid h-full">
+                                                <div className="col-12">
+                                                    <div className="surface-ground border-round-2xl p-4 h-full">
+                                                        <div className="text-600 text-sm mb-2">Capacidad semanal</div>
+                                                        <div className="text-3xl font-bold mb-2">78%</div>
+                                                        <div className="text-700 line-height-3">Visualiza el esfuerzo antes de aceptar otra carga.</div>
+                                                    </div>
+                                                </div>
+                                                <div className="col-12">
+                                                    <div className="surface-ground border-round-2xl p-4 h-full">
+                                                        <div className="text-600 text-sm mb-2">Reprogramaciones</div>
+                                                        <div className="text-3xl font-bold mb-2">12</div>
+                                                        <div className="text-700 line-height-3">Ajustes hechos sin perder historial ni notas.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                    </section>
 
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(145, 226, 237, 0.2), rgba(172, 180, 223, 0.2)), linear-gradient(180deg, rgba(172, 180, 223, 0.2), rgba(246, 158, 188, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-indigo-200"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-map text-2xl text-indigo-700"></i>
+                    <Divider id="features" align="center" className="my-6">
+                        <span className="text-600 font-medium">Funcionalidades</span>
+                    </Divider>
+
+                    <section className="grid">
+                        {features.map((feature) => (
+                            <div key={feature.title} className="col-12 md:col-4">
+                                <div className="surface-card border-round-3xl p-5 shadow-1 h-full">
+                                    <div className="w-4rem h-4rem border-round-2xl flex align-items-center justify-content-center mb-4" style={{ background: 'linear-gradient(135deg, #dbeafe, #ecfeff)' }}>
+                                        <i className={`pi ${feature.icon} text-2xl text-primary`} />
                                     </div>
-                                    <h5 className="mb-2 text-900">Well Documented</h5>
-                                    <span className="text-600">Non arcu risus quis varius quam quisque.</span>
+                                    <h3 className="text-2xl font-semibold mt-0 mb-3">{feature.title}</h3>
+                                    <p className="text-700 line-height-3 mb-0">{feature.description}</p>
                                 </div>
                             </div>
-                        </div>
+                        ))}
+                    </section>
 
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(187, 199, 205, 0.2),rgba(251, 199, 145, 0.2)), linear-gradient(180deg, rgba(253, 228, 165, 0.2),rgba(145, 210, 204, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-bluegray-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-id-card text-2xl text-bluegray-700"></i>
+                    <section id="how-it-works" className="py-6">
+                        <Divider align="center" className="mb-6">
+                            <span className="text-600 font-medium">Cómo funciona</span>
+                        </Divider>
+
+                        <div className="grid">
+                            {steps.map((step) => (
+                                <div key={step.number} className="col-12 lg:col-4">
+                                    <div className="surface-card border-round-3xl p-5 shadow-1 h-full">
+                                        <div className="text-5xl font-bold mb-3" style={{ color: '#94a3b8' }}>
+                                            {step.number}
+                                        </div>
+                                        <h3 className="text-2xl font-semibold mt-0 mb-3">{step.title}</h3>
+                                        <p className="text-700 line-height-3 mb-0">{step.description}</p>
                                     </div>
-                                    <h5 className="mb-2 text-900">Responsive Layout</h5>
-                                    <span className="text-600">Nulla malesuada pellentesque elit.</span>
                                 </div>
-                            </div>
+                            ))}
                         </div>
+                    </section>
 
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(187, 199, 205, 0.2),rgba(246, 158, 188, 0.2)), linear-gradient(180deg, rgba(145, 226, 237, 0.2),rgba(160, 210, 250, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-orange-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-star text-2xl text-orange-700"></i>
-                                    </div>
-                                    <h5 className="mb-2 text-900">Clean Code</h5>
-                                    <span className="text-600">Condimentum lacinia quis vel eros.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pb-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(251, 199, 145, 0.2), rgba(246, 158, 188, 0.2)), linear-gradient(180deg, rgba(172, 180, 223, 0.2), rgba(212, 162, 221, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-pink-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-moon text-2xl text-pink-700"></i>
-                                    </div>
-                                    <h5 className="mb-2 text-900">Dark Mode</h5>
-                                    <span className="text-600">Convallis tellus id interdum velit laoreet.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(145, 210, 204, 0.2), rgba(160, 210, 250, 0.2)), linear-gradient(180deg, rgba(187, 199, 205, 0.2), rgba(145, 210, 204, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-teal-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-shopping-cart text-2xl text-teal-700"></i>
-                                    </div>
-                                    <h5 className="mb-2 text-900">Ready to Use</h5>
-                                    <span className="text-600">Mauris sit amet massa vitae.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg:pr-5 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(145, 210, 204, 0.2), rgba(212, 162, 221, 0.2)), linear-gradient(180deg, rgba(251, 199, 145, 0.2), rgba(160, 210, 250, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-blue-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-globe text-2xl text-blue-700"></i>
-                                    </div>
-                                    <h5 className="mb-2 text-900">Modern Practices</h5>
-                                    <span className="text-600">Elementum nibh tellus molestie nunc non.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="col-12 md:col-12 lg:col-4 p-0 lg-4 mt-4 lg:mt-0">
-                            <div
-                                style={{
-                                    height: '160px',
-                                    padding: '2px',
-                                    borderRadius: '10px',
-                                    background: 'linear-gradient(90deg, rgba(160, 210, 250, 0.2), rgba(212, 162, 221, 0.2)), linear-gradient(180deg, rgba(246, 158, 188, 0.2), rgba(212, 162, 221, 0.2))'
-                                }}
-                            >
-                                <div className="p-3 surface-card h-full" style={{ borderRadius: '8px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center bg-purple-200 mb-3"
-                                        style={{
-                                            width: '3.5rem',
-                                            height: '3.5rem',
-                                            borderRadius: '10px'
-                                        }}
-                                    >
-                                        <i className="pi pi-fw pi-eye text-2xl text-purple-700"></i>
-                                    </div>
-                                    <h5 className="mb-2 text-900">Privacy</h5>
-                                    <span className="text-600">Neque egestas congue quisque.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            className="col-12 mt-8 mb-8 p-2 md:p-8"
-                            style={{
-                                borderRadius: '20px',
-                                background: 'linear-gradient(0deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)), radial-gradient(77.36% 256.97% at 77.36% 57.52%, #EFE1AF 0%, #C3DCFA 100%)'
-                            }}
-                        >
-                            <div className="flex flex-column justify-content-center align-items-center text-center px-3 py-3 md:py-0">
-                                <h3 className="text-gray-900 mb-2">Joséphine Miller</h3>
-                                <span className="text-gray-600 text-2xl">Peak Interactive</span>
-                                <p className="text-gray-900 sm:line-height-2 md:line-height-4 text-2xl mt-4" style={{ maxWidth: '800px' }}>
-                                    “Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est
-                                    laborum.”
+                    <section id="contact" className="py-4 pb-7">
+                        <div className="surface-card border-round-3xl p-5 md:p-6 shadow-3 flex flex-column lg:flex-row align-items-start lg:align-items-center justify-content-between gap-4">
+                            <div>
+                                <div className="text-primary font-semibold mb-2">Listo para empezar</div>
+                                <h2 className="text-3xl md:text-4xl font-bold mt-0 mb-3">Crea tu cuenta y organiza tu semana en minutos.</h2>
+                                <p className="text-700 line-height-3 m-0" style={{ maxWidth: '44rem' }}>
+                                    Entra a la aplicación, carga tus actividades y empieza a tomar decisiones con una vista clara de lo que viene.
                                 </p>
-                                <img src="/demo/images/landing/peak-logo.svg" className="mt-4" alt="Company logo" />
+                            </div>
+
+                            <div className="flex flex-column sm:flex-row gap-3">
+                                <Button label="Iniciar sesión" severity="secondary" outlined onClick={goToLogin} />
+                                <Button label="Crear cuenta" onClick={goToRegister} />
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div id="highlights" className="py-4 px-4 lg:px-8 mx-0 my-6 lg:mx-8">
-                    <div className="text-center">
-                        <h2 className="text-900 font-normal mb-2">Powerful Everywhere</h2>
-                        <span className="text-600 text-2xl">Amet consectetur adipiscing elit...</span>
-                    </div>
-
-                    <div className="grid mt-8 pb-2 md:pb-8">
-                        <div className="flex justify-content-center col-12 lg:col-6 bg-purple-100 p-0 flex-order-1 lg:flex-order-0" style={{ borderRadius: '8px' }}>
-                            <img src="/demo/images/landing/mockup.svg" className="w-11" alt="mockup mobile" />
-                        </div>
-
-                        <div className="col-12 lg:col-6 my-auto flex flex-column lg:align-items-end text-center lg:text-right">
-                            <div
-                                className="flex align-items-center justify-content-center bg-purple-200 align-self-center lg:align-self-end"
-                                style={{
-                                    width: '4.2rem',
-                                    height: '4.2rem',
-                                    borderRadius: '10px'
-                                }}
-                            >
-                                <i className="pi pi-fw pi-mobile text-5xl text-purple-700"></i>
-                            </div>
-                            <h2 className="line-height-1 text-900 text-4xl font-normal">Congue Quisque Egestas</h2>
-                            <span className="text-700 text-2xl line-height-3 ml-0 md:ml-2" style={{ maxWidth: '650px' }}>
-                                Lectus arcu bibendum at varius vel pharetra vel turpis nunc. Eget aliquet nibh praesent tristique magna sit amet purus gravida. Sit amet mattis vulputate enim nulla aliquet.
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="grid my-8 pt-2 md:pt-8">
-                        <div className="col-12 lg:col-6 my-auto flex flex-column text-center lg:text-left lg:align-items-start">
-                            <div
-                                className="flex align-items-center justify-content-center bg-yellow-200 align-self-center lg:align-self-start"
-                                style={{
-                                    width: '4.2rem',
-                                    height: '4.2rem',
-                                    borderRadius: '10px'
-                                }}
-                            >
-                                <i className="pi pi-fw pi-desktop text-5xl text-yellow-700"></i>
-                            </div>
-                            <h2 className="line-height-1 text-900 text-4xl font-normal">Celerisque Eu Ultrices</h2>
-                            <span className="text-700 text-2xl line-height-3 mr-0 md:mr-2" style={{ maxWidth: '650px' }}>
-                                Adipiscing commodo elit at imperdiet dui. Viverra nibh cras pulvinar mattis nunc sed blandit libero. Suspendisse in est ante in. Mauris pharetra et ultrices neque ornare aenean euismod elementum nisi.
-                            </span>
-                        </div>
-
-                        <div className="flex justify-content-end flex-order-1 sm:flex-order-2 col-12 lg:col-6 bg-yellow-100 p-0" style={{ borderRadius: '8px' }}>
-                            <img src="/demo/images/landing/mockup-desktop.svg" className="w-11" alt="mockup" />
-                        </div>
-                    </div>
-                </div>
-
-                <div id="pricing" className="py-4 px-4 lg:px-8 my-2 md:my-4">
-                    <div className="text-center">
-                        <h2 className="text-900 font-normal mb-2">Matchless Pricing</h2>
-                        <span className="text-600 text-2xl">Amet consectetur adipiscing elit...</span>
-                    </div>
-
-                    <div className="grid justify-content-between mt-8 md:mt-0">
-                        <div className="col-12 lg:col-4 p-0 md:p-3">
-                            <div className="p-3 flex flex-column border-200 pricing-card cursor-pointer border-2 hover:border-primary transition-duration-300 transition-all">
-                                <h3 className="text-900 text-center my-5">Free</h3>
-                                <img src="/demo/images/landing/free.svg" className="w-10 h-10 mx-auto" alt="free" />
-                                <div className="my-5 text-center">
-                                    <span className="text-5xl font-bold mr-2 text-900">$0</span>
-                                    <span className="text-600">per month</span>
-                                    <Button label="Get Started" rounded className="block mx-auto mt-4 border-none ml-3 font-light line-height-2 bg-blue-500 text-white"></Button>
-                                </div>
-                                <Divider className="w-full bg-surface-200"></Divider>
-                                <ul className="my-5 list-none p-0 flex text-900 flex-column">
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Responsive Layout</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Unlimited Push Messages</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">50 Support Ticket</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Free Shipping</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div className="col-12 lg:col-4 p-0 md:p-3 mt-4 md:mt-0">
-                            <div className="p-3 flex flex-column border-200 pricing-card cursor-pointer border-2 hover:border-primary transition-duration-300 transition-all">
-                                <h3 className="text-900 text-center my-5">Startup</h3>
-                                <img src="/demo/images/landing/startup.svg" className="w-10 h-10 mx-auto" alt="startup" />
-                                <div className="my-5 text-center">
-                                    <span className="text-5xl font-bold mr-2 text-900">$1</span>
-                                    <span className="text-600">per month</span>
-                                    <Button label="Try Free" rounded className="block mx-auto mt-4 border-none ml-3 font-light line-height-2 bg-blue-500 text-white"></Button>
-                                </div>
-                                <Divider className="w-full bg-surface-200"></Divider>
-                                <ul className="my-5 list-none p-0 flex text-900 flex-column">
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Responsive Layout</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Unlimited Push Messages</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">50 Support Ticket</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Free Shipping</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div className="col-12 lg:col-4 p-0 md:p-3 mt-4 md:mt-0">
-                            <div className="p-3 flex flex-column border-200 pricing-card cursor-pointer border-2 hover:border-primary transition-duration-300 transition-all">
-                                <h3 className="text-900 text-center my-5">Enterprise</h3>
-                                <img src="/demo/images/landing/enterprise.svg" className="w-10 h-10 mx-auto" alt="enterprise" />
-                                <div className="my-5 text-center">
-                                    <span className="text-5xl font-bold mr-2 text-900">$999</span>
-                                    <span className="text-600">per month</span>
-                                    <Button label="Get a Quote" rounded className="block mx-auto mt-4 border-none ml-3 font-light line-height-2 bg-blue-500 text-white"></Button>
-                                </div>
-                                <Divider className="w-full bg-surface-200"></Divider>
-                                <ul className="my-5 list-none p-0 flex text-900 flex-column">
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Responsive Layout</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Unlimited Push Messages</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">50 Support Ticket</span>
-                                    </li>
-                                    <li className="py-2">
-                                        <i className="pi pi-fw pi-check text-xl text-cyan-500 mr-2"></i>
-                                        <span className="text-xl line-height-3">Free Shipping</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="py-4 px-4 mx-0 mt-8 lg:mx-8">
-                    <div className="grid justify-content-between">
-                        <div className="col-12 md:col-2" style={{ marginTop: '-1.5rem' }}>
-                            <Link href="/" className="flex flex-wrap align-items-center justify-content-center md:justify-content-start md:mb-0 mb-3 cursor-pointer">
-                                <img src={`/layout/images/${layoutConfig.colorScheme === 'light' ? 'logo-dark' : 'logo-white'}.svg`} alt="footer sections" width="50" height="50" className="mr-2" />
-                                <span className="font-medium text-3xl text-900">SAKAI</span>
-                            </Link>
-                        </div>
-
-                        <div className="col-12 md:col-10 lg:col-7">
-                            <div className="grid text-center md:text-left">
-                                <div className="col-12 md:col-3">
-                                    <h4 className="font-medium text-2xl line-height-3 mb-3 text-900">Company</h4>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">About Us</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">News</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Investor Relations</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Careers</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer text-700">Media Kit</a>
-                                </div>
-
-                                <div className="col-12 md:col-3 mt-4 md:mt-0">
-                                    <h4 className="font-medium text-2xl line-height-3 mb-3 text-900">Resources</h4>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Get Started</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Learn</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer text-700">Case Studies</a>
-                                </div>
-
-                                <div className="col-12 md:col-3 mt-4 md:mt-0">
-                                    <h4 className="font-medium text-2xl line-height-3 mb-3 text-900">Community</h4>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Discord</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">
-                                        Events
-                                        <img src="/demo/images/landing/new-badge.svg" className="ml-2" alt="badge" />
-                                    </a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">FAQ</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer text-700">Blog</a>
-                                </div>
-
-                                <div className="col-12 md:col-3 mt-4 md:mt-0">
-                                    <h4 className="font-medium text-2xl line-height-3 mb-3 text-900">Legal</h4>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Brand Policy</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer mb-2 text-700">Privacy Policy</a>
-                                    <a className="line-height-3 text-xl block cursor-pointer text-700">Terms of Service</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    </section>
+                </main>
             </div>
         </div>
     );
