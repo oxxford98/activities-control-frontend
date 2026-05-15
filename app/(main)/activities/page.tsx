@@ -16,6 +16,7 @@ import { Toast } from 'primereact/toast';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/routes';
 import ApiService from '@/service/ApiService';
+import { CreateActivityModal } from '@/components/CreateActivityModal';
 
 
 interface ActivityItem {
@@ -95,6 +96,7 @@ const ActivitiesPage = () => {
     const [pendingDeleteSubActivity, setPendingDeleteSubActivity] = useState<SubActivityItem | null>(null);
 
     const [showWorkPlanForm, setShowWorkPlanForm] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [taskName, setTaskName] = useState('');
     const [taskDescription, setTaskDescription] = useState('');
     const [targetDate, setTargetDate] = useState('');
@@ -717,7 +719,7 @@ const ActivitiesPage = () => {
             <Toast ref={toastRef} />
             <div className="flex flex-column gap-4">
                 <div className="flex justify-content-end">
-                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => router.push('/activities/crear')} />
+                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => setShowCreateModal(true)} />
                 </div>
 
                 {activitiesError && <div className="text-red-500 font-medium">{activitiesError}</div>}
@@ -1048,6 +1050,12 @@ const ActivitiesPage = () => {
                         </div>
                     </div>
                 </Dialog>
+
+                <CreateActivityModal
+                    visible={showCreateModal}
+                    onHide={() => setShowCreateModal(false)}
+                    onSuccess={fetchActivities}
+                />
             </div>
         </Card>
     );
