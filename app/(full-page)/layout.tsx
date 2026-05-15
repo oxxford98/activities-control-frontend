@@ -8,7 +8,10 @@ interface SimpleLayoutProps {
 
 export const metadata: Metadata = {
     title: 'PlanificaUni',
-    description: 'App para planificación de actividades académicas'
+    description: 'App para planificación de actividades académicas',
+    icons: {
+        icon: '/favicon.ico'
+    }
 };
 
 export default function SimpleLayout({ children }: SimpleLayoutProps) {

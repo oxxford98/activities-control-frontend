@@ -29,6 +29,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
     return (
         <html lang="es" suppressHydrationWarning>
             <head>
+                <link rel="icon" href="/favicon.ico" />
                 <link id="theme-css" href={`/themes/lara-light-indigo/theme.css`} rel="stylesheet"></link>
             </head>
             <body>
