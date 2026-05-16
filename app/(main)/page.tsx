@@ -15,6 +15,7 @@ import { Divider } from 'primereact/divider';
 import { Toast } from 'primereact/toast';
 import { RescheduleModal, ValidateTentativeDateResult } from '@/components/RescheduleModal';
 import { CapacityTracker } from '@/components/CapacityTracker';
+import { CreateActivityModal } from '@/components/CreateActivityModal';
 
 interface TokenPayload {
     first_name?: string;
@@ -153,6 +154,7 @@ const Dashboard = () => {
     const [postponeItem, setPostponeItem] = useState<TodayActivityItem | null>(null);
     const [postponeVisible, setPostponeVisible] = useState(false);
     const [postponeNote, setPostponeNote] = useState('');
+    const [showCreateModal, setShowCreateModal] = useState(false);
 
     const formatDateTime = (value: string | null | undefined) => {
         if (!value) return '-';
@@ -907,7 +909,7 @@ const Dashboard = () => {
                                     Crea una actividad y empieza a organizar tu tiempo.
                                 </div>
                             </div>
-                            <Button label="Crear actividad" icon="pi pi-plus" size="large" onClick={() => router.push('/activities/crear')} />
+                            <Button label="Crear actividad" icon="pi pi-plus" size="large" onClick={() => setShowCreateModal(true)} />
                         </div>
                     ) : (
                         <div className="flex gap-3" style={{ overflowX: 'auto', alignItems: 'flex-start' }}>
@@ -1049,6 +1051,13 @@ const Dashboard = () => {
                 currentDate={rescheduleItem ? formatDateTime(rescheduleItem.target_date) : null}
                 onValidate={handleValidateTentativeDate}
                 onSave={handleSaveReschedule}
+            />
+
+            {/* Create Activity Modal */}
+            <CreateActivityModal
+                visible={showCreateModal}
+                onHide={() => setShowCreateModal(false)}
+                onSuccess={() => fetchToday()}
             />
 
             {/* Postpone Modal */}
