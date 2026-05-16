@@ -407,7 +407,7 @@ export function CreateActivityModal({ visible, onHide, onSuccess }: CreateActivi
                                 <i className="pi pi-calendar mb-3" style={{ fontSize: '2rem', color: '#A0AEC0' }} />
                                 <p className="text-500 font-medium m-0">Aún no hay subtareas añadidas</p>
                                 <p className="text-400 text-sm mt-1 mb-0">
-                                    Haz clic en "Agregar subtarea" para comenzar
+                                    Haz clic en &quot;Agregar subtarea&quot; para comenzar
                                 </p>
                             </div>
                         ) : (
