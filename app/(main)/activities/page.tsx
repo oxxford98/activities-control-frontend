@@ -997,6 +997,7 @@ const ActivitiesPage = () => {
                                         }
                                     />
                                     <Column header="Estado" body={subStatusTemplate} />
+                                    <Column header="Acciones" body={subActivityActionsTemplate} />
                                 </DataTable>
 
                                 <div>
