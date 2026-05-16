@@ -120,6 +120,11 @@ const ActivitiesPage = () => {
     const [subtaskMessage, setSubtaskMessage] = useState('');
     const [subtaskLoading, setSubtaskLoading] = useState(false);
 
+    // Inline add-subtask validation
+    const [addSubValidationState, setAddSubValidationState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [addSubValidationDetails, setAddSubValidationDetails] = useState<ValidateResult | null>(null);
+    const addSubValidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const [subtaskFieldErrors, setSubtaskFieldErrors] = useState({ name: false, targetDate: false, estimatedTime: false });
     const [subtaskTouched, setSubtaskTouched] = useState({ name: false, targetDate: false, estimatedTime: false });
 
@@ -379,6 +384,52 @@ const ActivitiesPage = () => {
         };
     }, [editingSubActivity?.target_date, editingSubActivity?.estimated_time, subActivityEditDialogVisible]);
 
+    useEffect(() => {
+        if (addSubValidationTimerRef.current) clearTimeout(addSubValidationTimerRef.current);
+
+        if (!showWorkPlanForm) {
+            setAddSubValidationState('idle');
+            setAddSubValidationDetails(null);
+            return;
+        }
+
+        const hoursNum = Number(estimatedTime.trim());
+        const hasHours = estimatedTime.trim() !== '' && !Number.isNaN(hoursNum) && hoursNum >= 1;
+        const hasDate = targetDate.trim() !== '';
+
+        if (hasHours && hasDate) {
+            setAddSubValidationState('checking');
+            addSubValidationTimerRef.current = setTimeout(async () => {
+                const token = getSessionToken();
+                if (!token) { setAddSubValidationState('idle'); return; }
+                try {
+                    const isoDate = new Date(targetDate).toISOString();
+                    const resp = await fetch(
+                        `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/validate-tentative-date-to-create-sub`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ tentative_date: isoDate, hours_estimated: hoursNum }),
+                        }
+                    );
+                    const data: ValidateResult = await resp.json();
+                    setAddSubValidationDetails(data);
+                    setAddSubValidationState(data.valid ? 'success' : 'error');
+                } catch {
+                    setAddSubValidationState('idle');
+                    setAddSubValidationDetails(null);
+                }
+            }, 500);
+        } else {
+            setAddSubValidationState('idle');
+            setAddSubValidationDetails(null);
+        }
+
+        return () => {
+            if (addSubValidationTimerRef.current) clearTimeout(addSubValidationTimerRef.current);
+        };
+    }, [targetDate, estimatedTime, showWorkPlanForm]);
+
     const openActivityDetails = (activity: ActivityItem) => {
         setSelectedActivity(activity);
         setShowActivityModal(true);
@@ -556,6 +607,12 @@ const ActivitiesPage = () => {
         const offset = date.getTimezoneOffset() * 60000;
         const localValue = new Date(date.getTime() - offset).toISOString().slice(0, 16);
         setEditingSubActivity((prev) => (prev ? { ...prev, target_date: localValue } : prev));
+    };
+
+    const handleApplyAddSubSuggestion = (isoDate: string) => {
+        const date = new Date(isoDate);
+        const offset = date.getTimezoneOffset() * 60000;
+        setTargetDate(new Date(date.getTime() - offset).toISOString().slice(0, 16));
     };
 
     const handleSaveSubActivityEdit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -766,6 +823,24 @@ const ActivitiesPage = () => {
         }
     };
 
+    const subStatusTemplate = (rowData: SubActivityItem) => {
+        const status = Number(rowData.status_subactivity ?? 0);
+        const cfg =
+            status === 2
+                ? { label: 'Completada', bg: '#F0FDF4', color: '#166534', border: '#86EFAC' }
+                : status === 1
+                ? { label: 'Pospuesta', bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' }
+                : { label: 'Activa', bg: '#EFF6FF', color: '#1D4ED8', border: '#93C5FD' };
+        return (
+            <span
+                className="text-xs font-semibold px-2 py-1 border-round"
+                style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
+            >
+                {cfg.label}
+            </span>
+        );
+    };
+
     const progressTemplate = (rowData: ActivityItem) => {
         const total = rowData.total_subactivities ?? 0;
         const completed = rowData.total_completed ?? 0;
@@ -921,7 +996,7 @@ const ActivitiesPage = () => {
                                             formatSubActivityDate(rowData.target_date || null)
                                         }
                                     />
-                                    <Column header="Acciones" body={subActivityActionsTemplate} />
+                                    <Column header="Estado" body={subStatusTemplate} />
                                 </DataTable>
 
                                 <div>
@@ -958,30 +1033,97 @@ const ActivitiesPage = () => {
                                             />
                                         </div>
 
-                                        <div className="flex flex-column gap-2">
-                                            <label htmlFor="targetDate" className="font-semibold">
-                                                Fecha objetivo *
-                                            </label>
-                                            <InputText
-                                                id="targetDate"
-                                                type="datetime-local"
-                                                value={targetDate}
-                                                onChange={(e) => setTargetDate(e.target.value)}
-                                            />
+                                        <div className="grid">
+                                            <div className="col-12 md:col-6">
+                                                <div className="flex flex-column gap-2">
+                                                    <label htmlFor="targetDate" className="font-semibold">
+                                                        Fecha objetivo *
+                                                    </label>
+                                                    <InputText
+                                                        id="targetDate"
+                                                        type="datetime-local"
+                                                        value={targetDate}
+                                                        onChange={(e) => setTargetDate(e.target.value)}
+                                                        className={addSubValidationState === 'error' ? 'p-invalid' : ''}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="col-12 md:col-6">
+                                                <div className="flex flex-column gap-2">
+                                                    <label htmlFor="estimatedTime" className="font-semibold">
+                                                        Horas estimadas *
+                                                    </label>
+                                                    <InputText
+                                                        id="estimatedTime"
+                                                        type="number"
+                                                        min={1}
+                                                        step={0.5}
+                                                        value={estimatedTime}
+                                                        onChange={(e) => setEstimatedTime(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        <div className="flex flex-column gap-2">
-                                            <label htmlFor="estimatedTime" className="font-semibold">
-                                                Tiempo estimado *
-                                            </label>
-                                            <InputText
-                                                id="estimatedTime"
-                                                type="number"
-                                                min={1}
-                                                value={estimatedTime}
-                                                onChange={(e) => setEstimatedTime(e.target.value)}
-                                            />
-                                        </div>
+                                        {/* Validation zone */}
+                                        {addSubValidationState === 'checking' && (
+                                            <div className="border-round p-3 flex align-items-center gap-2" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                                <i className="pi pi-spin pi-spinner text-primary" />
+                                                <span className="text-600 text-sm">Verificando disponibilidad de la agenda...</span>
+                                            </div>
+                                        )}
+                                        {addSubValidationState === 'success' && addSubValidationDetails && (
+                                            <div className="border-round p-3 flex gap-2" style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC' }}>
+                                                <i className="pi pi-check-circle mt-1" style={{ color: '#16A34A', fontSize: '1.1rem' }} />
+                                                <div>
+                                                    <div className="font-semibold" style={{ color: '#166534' }}>Fecha disponible</div>
+                                                    <div className="text-sm mt-1" style={{ color: '#15803D' }}>
+                                                        La carga del día quedaría en {addSubValidationDetails.current_load} h de {addSubValidationDetails.limit} h máx.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {addSubValidationState === 'error' && addSubValidationDetails && (
+                                            <div className="flex flex-column gap-2">
+                                                <div className="border-round p-3" style={{ backgroundColor: '#FFF5F5', border: '1px solid #FCA5A5' }}>
+                                                    <div className="flex gap-2">
+                                                        <i className="pi pi-exclamation-circle mt-1" style={{ color: '#DC2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                                                        <div>
+                                                            <div className="font-semibold" style={{ color: '#991B1B' }}>Fecha no disponible</div>
+                                                            <div className="text-sm mt-1" style={{ color: '#B91C1C' }}>
+                                                                Carga estimada: {addSubValidationDetails.current_load} h — Límite: {addSubValidationDetails.limit} h
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {Array.isArray(addSubValidationDetails.suggestions) && addSubValidationDetails.suggestions.length > 0 && (
+                                                    <div>
+                                                        <div className="text-sm font-semibold mb-2" style={{ color: '#4338CA' }}>Fechas sugeridas — haz clic para aplicar:</div>
+                                                        <div className="flex flex-column gap-2">
+                                                            {addSubValidationDetails.suggestions.map((sug, idx) => (
+                                                                <button
+                                                                    key={idx}
+                                                                    type="button"
+                                                                    onClick={() => handleApplyAddSubSuggestion(sug.tentative_date)}
+                                                                    className="flex align-items-center justify-content-between p-2 border-round w-full cursor-pointer"
+                                                                    style={{ border: '1px solid #E2E8F0', backgroundColor: '#FAFAFA', textAlign: 'left' }}
+                                                                >
+                                                                    <div className="flex align-items-center gap-2">
+                                                                        <i className="pi pi-calendar text-500" />
+                                                                        <span className="text-sm text-900">
+                                                                            {new Date(sug.tentative_date).toLocaleString('es-CO')}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-xs font-medium px-2 py-1 border-round" style={{ color: '#16A34A', backgroundColor: '#F0FDF4' }}>
+                                                                        {sug.current_load} h
+                                                                    </span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         <div className="flex justify-content-end">
                                             <Button
@@ -989,6 +1131,7 @@ const ActivitiesPage = () => {
                                                 label="Guardar subtarea"
                                                 icon="pi pi-check"
                                                 loading={subtaskLoading}
+                                                disabled={addSubValidationState !== 'success' || subtaskLoading}
                                             />
                                         </div>
                                     </form>
