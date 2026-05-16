@@ -3,7 +3,7 @@ import ApiService from './service/ApiService';
 import JwtService from './service/JwtService';
 
 // Rutas públicas que no requieren autenticación
-const PUBLIC_ROUTES = ['/auth/login', '/auth/register'];
+const PUBLIC_ROUTES = ['/auth/login', '/auth/register', '/landing'];
 
 // Rutas privadas que requieren autenticación
 const PROTECTED_ROUTES = ['/', '/activities', '/activities/crear'];
@@ -37,6 +37,10 @@ const debugLog = (...args: any[]) => {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const accessToken = request.cookies.get('access_token')?.value;
+
+    if (pathname === '/' && !isValidToken(accessToken)) {
+        return NextResponse.redirect(new URL('/landing', request.url));
+    }
 
     // Si el usuario está autenticado y trata de acceder a login/register, redirigir al home
     if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {

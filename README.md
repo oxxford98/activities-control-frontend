@@ -39,7 +39,7 @@ npm run start
 ### Ejecutar en local con Docker Compose (recomendado)
 
 ```bash
-docker compose up --build -d
+docker compose --env-file .env.local up --build -d
 ```
 
 Para detenerlo:
@@ -47,6 +47,10 @@ Para detenerlo:
 ```bash
 docker compose down
 ```
+
+**Nota sobre variables de entorno:** Docker Compose lee un archivo `.env` por defecto, no `.env.local`. Para usar las variables de `.env.local`:
+- Opción 1 (recomendada): Usa el flag `--env-file .env.local` en el comando (como arriba)
+- Opción 2: Copia `.env.local` a `.env`: `cp .env.local .env`
 
 Este mismo archivo docker-compose.yml se usa para produccion.
 
