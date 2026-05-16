@@ -10,12 +10,14 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from 'primereact/card';
+import { ProgressBar } from 'primereact/progressbar';
 import { decodeSessionTokenPayload, getSessionToken, validateAndRefreshToken } from '@/lib/sessionUser';
 import JwtService from '@/service/JwtService';
 import { Toast } from 'primereact/toast';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/routes';
 import ApiService from '@/service/ApiService';
+import { CreateActivityModal } from '@/components/CreateActivityModal';
 
 
 interface ActivityItem {
@@ -25,6 +27,15 @@ interface ActivityItem {
     type_activity: string;
     user?: number;
     raw: Record<string, any>;
+    total_subactivities: number;
+    total_completed: number;
+}
+
+interface ValidateResult {
+    valid: boolean;
+    current_load: number;
+    limit: number;
+    suggestions?: Array<{ tentative_date: string; current_load: number }>;
 }
 
 interface SubActivityItem {
@@ -95,12 +106,24 @@ const ActivitiesPage = () => {
     const [pendingDeleteSubActivity, setPendingDeleteSubActivity] = useState<SubActivityItem | null>(null);
 
     const [showWorkPlanForm, setShowWorkPlanForm] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    // Sub-activity edit validation
+    const [subEditValidationState, setSubEditValidationState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [subEditValidationDetails, setSubEditValidationDetails] = useState<ValidateResult | null>(null);
+    const subEditValidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const [taskName, setTaskName] = useState('');
     const [taskDescription, setTaskDescription] = useState('');
     const [targetDate, setTargetDate] = useState('');
     const [estimatedTime, setEstimatedTime] = useState('');
     const [subtaskMessage, setSubtaskMessage] = useState('');
     const [subtaskLoading, setSubtaskLoading] = useState(false);
+
+    // Inline add-subtask validation
+    const [addSubValidationState, setAddSubValidationState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [addSubValidationDetails, setAddSubValidationDetails] = useState<ValidateResult | null>(null);
+    const addSubValidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const [subtaskFieldErrors, setSubtaskFieldErrors] = useState({ name: false, targetDate: false, estimatedTime: false });
     const [subtaskTouched, setSubtaskTouched] = useState({ name: false, targetDate: false, estimatedTime: false });
@@ -175,7 +198,9 @@ const ActivitiesPage = () => {
                 type_activity: String(item.type_activity ?? ''),
                 subject: item.subject ?? null,
                 user: item.user !== undefined ? Number(item.user) : undefined,
-                raw: item
+                raw: item,
+                total_subactivities: Number(item.total_subactivities ?? 0),
+                total_completed: Number(item.total_completed ?? 0),
             }));
 
             setActivities(formatted);
@@ -302,6 +327,108 @@ const ActivitiesPage = () => {
 
         validateTokenOnMount();
     }, [router]);
+
+    useEffect(() => {
+        if (subEditValidationTimerRef.current) clearTimeout(subEditValidationTimerRef.current);
+
+        if (!subActivityEditDialogVisible || !editingSubActivity) {
+            setSubEditValidationState('idle');
+            setSubEditValidationDetails(null);
+            return;
+        }
+
+        const dateVal = editingSubActivity.target_date;
+        const estimatedVal = editingSubActivity.estimated_time;
+        const hoursNum = Number(String(estimatedVal ?? '').trim());
+        const hasHours =
+            estimatedVal !== undefined &&
+            estimatedVal !== null &&
+            estimatedVal !== '' &&
+            !Number.isNaN(hoursNum) &&
+            hoursNum >= 1;
+        const hasDate = !!dateVal && String(dateVal).trim() !== '';
+
+        if (hasHours && hasDate) {
+            setSubEditValidationState('checking');
+            subEditValidationTimerRef.current = setTimeout(async () => {
+                const token = getSessionToken();
+                if (!token) {
+                    setSubEditValidationState('idle');
+                    return;
+                }
+                try {
+                    const isoDate = new Date(String(dateVal)).toISOString();
+                    const resp = await fetch(
+                        `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/validate-tentative-date-to-create-sub`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ tentative_date: isoDate, hours_estimated: hoursNum }),
+                        }
+                    );
+                    const data: ValidateResult = await resp.json();
+                    setSubEditValidationDetails(data);
+                    setSubEditValidationState(data.valid ? 'success' : 'error');
+                } catch {
+                    setSubEditValidationState('idle');
+                    setSubEditValidationDetails(null);
+                }
+            }, 500);
+        } else {
+            setSubEditValidationState('idle');
+            setSubEditValidationDetails(null);
+        }
+
+        return () => {
+            if (subEditValidationTimerRef.current) clearTimeout(subEditValidationTimerRef.current);
+        };
+    }, [editingSubActivity?.target_date, editingSubActivity?.estimated_time, subActivityEditDialogVisible]);
+
+    useEffect(() => {
+        if (addSubValidationTimerRef.current) clearTimeout(addSubValidationTimerRef.current);
+
+        if (!showWorkPlanForm) {
+            setAddSubValidationState('idle');
+            setAddSubValidationDetails(null);
+            return;
+        }
+
+        const hoursNum = Number(estimatedTime.trim());
+        const hasHours = estimatedTime.trim() !== '' && !Number.isNaN(hoursNum) && hoursNum >= 1;
+        const hasDate = targetDate.trim() !== '';
+
+        if (hasHours && hasDate) {
+            setAddSubValidationState('checking');
+            addSubValidationTimerRef.current = setTimeout(async () => {
+                const token = getSessionToken();
+                if (!token) { setAddSubValidationState('idle'); return; }
+                try {
+                    const isoDate = new Date(targetDate).toISOString();
+                    const resp = await fetch(
+                        `${process.env.NEXT_PUBLIC_API_URL}/sub-activities/validate-tentative-date-to-create-sub`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ tentative_date: isoDate, hours_estimated: hoursNum }),
+                        }
+                    );
+                    const data: ValidateResult = await resp.json();
+                    setAddSubValidationDetails(data);
+                    setAddSubValidationState(data.valid ? 'success' : 'error');
+                } catch {
+                    setAddSubValidationState('idle');
+                    setAddSubValidationDetails(null);
+                }
+            }, 500);
+        } else {
+            setAddSubValidationState('idle');
+            setAddSubValidationDetails(null);
+        }
+
+        return () => {
+            if (addSubValidationTimerRef.current) clearTimeout(addSubValidationTimerRef.current);
+        };
+    }, [targetDate, estimatedTime, showWorkPlanForm]);
 
     const openActivityDetails = (activity: ActivityItem) => {
         setSelectedActivity(activity);
@@ -468,8 +595,24 @@ const ActivitiesPage = () => {
 
     const openEditSubActivity = (subActivity: SubActivityItem) => {
         setEditingSubActivity({ ...subActivity });
-        setSubActivityEditError('');  // ← limpia error al abrir
+        setSubActivityEditError('');
+        setSubEditValidationState('idle');
+        setSubEditValidationDetails(null);
+        if (subEditValidationTimerRef.current) clearTimeout(subEditValidationTimerRef.current);
         setSubActivityEditDialogVisible(true);
+    };
+
+    const handleApplySubEditSuggestion = (isoDate: string) => {
+        const date = new Date(isoDate);
+        const offset = date.getTimezoneOffset() * 60000;
+        const localValue = new Date(date.getTime() - offset).toISOString().slice(0, 16);
+        setEditingSubActivity((prev) => (prev ? { ...prev, target_date: localValue } : prev));
+    };
+
+    const handleApplyAddSubSuggestion = (isoDate: string) => {
+        const date = new Date(isoDate);
+        const offset = date.getTimezoneOffset() * 60000;
+        setTargetDate(new Date(date.getTime() - offset).toISOString().slice(0, 16));
     };
 
     const handleSaveSubActivityEdit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -680,6 +823,39 @@ const ActivitiesPage = () => {
         }
     };
 
+    const subStatusTemplate = (rowData: SubActivityItem) => {
+        const status = Number(rowData.status_subactivity ?? 0);
+        const cfg =
+            status === 2
+                ? { label: 'Completada', bg: '#F0FDF4', color: '#166534', border: '#86EFAC' }
+                : status === 1
+                ? { label: 'Pospuesta', bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' }
+                : { label: 'Activa', bg: '#EFF6FF', color: '#1D4ED8', border: '#93C5FD' };
+        return (
+            <span
+                className="text-xs font-semibold px-2 py-1 border-round"
+                style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
+            >
+                {cfg.label}
+            </span>
+        );
+    };
+
+    const progressTemplate = (rowData: ActivityItem) => {
+        const total = rowData.total_subactivities ?? 0;
+        const completed = rowData.total_completed ?? 0;
+        const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
+        return (
+            <div className="flex flex-column gap-1" style={{ minWidth: '9rem' }}>
+                <div className="flex justify-content-between align-items-center">
+                    <span className="text-xs text-500">{completed}/{total} subtareas</span>
+                    <span className="font-bold text-sm">{pct}%</span>
+                </div>
+                <ProgressBar value={pct} showValue={false} style={{ height: '6px' }} />
+            </div>
+        );
+    };
+
     const titleTemplate = (rowData: ActivityItem) => {
         return <Button label={rowData.title} link className="p-0 text-left" onClick={() => openActivityDetails(rowData)} />;
     };
@@ -717,7 +893,7 @@ const ActivitiesPage = () => {
             <Toast ref={toastRef} />
             <div className="flex flex-column gap-4">
                 <div className="flex justify-content-end">
-                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => router.push('/activities/crear')} />
+                    <Button label="Crear actividad" icon="pi pi-plus" onClick={() => setShowCreateModal(true)} />
                 </div>
 
                 {activitiesError && <div className="text-red-500 font-medium">{activitiesError}</div>}
@@ -751,8 +927,7 @@ const ActivitiesPage = () => {
                             <Column field="title" header="Título" body={titleTemplate} />
                             <Column field="subject" header="Materia" body={(rowData: ActivityItem) => rowData.subject || '-'} />
                             <Column field="type_activity" header="Tipo de actividad" />
-                            <Column field="fecha" header="Fecha del evento" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.event_date)} />
-                            <Column field="fecha_limite" header="Fecha límite" body={(rowData: ActivityItem) => formatDateTime(rowData.raw?.deadline)} />
+                            <Column header="Progreso" body={progressTemplate} />
                             <Column header="Acciones" body={activityActionsTemplate} />
                         </DataTable>
                     </div>
@@ -796,16 +971,6 @@ const ActivitiesPage = () => {
                                             <span className="font-semibold">Descripción</span>
                                             <span>{selectedActivityDetail.description || '-'}</span>
                                         </div>
-
-                                        <div className="col-12 md:col-6 flex flex-column gap-1">
-                                            <span className="font-semibold">Fecha del evento</span>
-                                            <span>{formatDateTime(selectedActivityDetail.event_date)}</span>
-                                        </div>
-
-                                        <div className="col-12 md:col-6 flex flex-column gap-1">
-                                            <span className="font-semibold">Fecha límite</span>
-                                            <span>{formatDateTime(selectedActivityDetail.deadline)}</span>
-                                        </div>
                                     </div>
                                 ) : null}
 
@@ -831,7 +996,7 @@ const ActivitiesPage = () => {
                                             formatSubActivityDate(rowData.target_date || null)
                                         }
                                     />
-                                    <Column header="Acciones" body={subActivityActionsTemplate} />
+                                    <Column header="Estado" body={subStatusTemplate} />
                                 </DataTable>
 
                                 <div>
@@ -868,30 +1033,97 @@ const ActivitiesPage = () => {
                                             />
                                         </div>
 
-                                        <div className="flex flex-column gap-2">
-                                            <label htmlFor="targetDate" className="font-semibold">
-                                                Fecha objetivo *
-                                            </label>
-                                            <InputText
-                                                id="targetDate"
-                                                type="datetime-local"
-                                                value={targetDate}
-                                                onChange={(e) => setTargetDate(e.target.value)}
-                                            />
+                                        <div className="grid">
+                                            <div className="col-12 md:col-6">
+                                                <div className="flex flex-column gap-2">
+                                                    <label htmlFor="targetDate" className="font-semibold">
+                                                        Fecha objetivo *
+                                                    </label>
+                                                    <InputText
+                                                        id="targetDate"
+                                                        type="datetime-local"
+                                                        value={targetDate}
+                                                        onChange={(e) => setTargetDate(e.target.value)}
+                                                        className={addSubValidationState === 'error' ? 'p-invalid' : ''}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="col-12 md:col-6">
+                                                <div className="flex flex-column gap-2">
+                                                    <label htmlFor="estimatedTime" className="font-semibold">
+                                                        Horas estimadas *
+                                                    </label>
+                                                    <InputText
+                                                        id="estimatedTime"
+                                                        type="number"
+                                                        min={1}
+                                                        step={0.5}
+                                                        value={estimatedTime}
+                                                        onChange={(e) => setEstimatedTime(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        <div className="flex flex-column gap-2">
-                                            <label htmlFor="estimatedTime" className="font-semibold">
-                                                Tiempo estimado *
-                                            </label>
-                                            <InputText
-                                                id="estimatedTime"
-                                                type="number"
-                                                min={1}
-                                                value={estimatedTime}
-                                                onChange={(e) => setEstimatedTime(e.target.value)}
-                                            />
-                                        </div>
+                                        {/* Validation zone */}
+                                        {addSubValidationState === 'checking' && (
+                                            <div className="border-round p-3 flex align-items-center gap-2" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                                <i className="pi pi-spin pi-spinner text-primary" />
+                                                <span className="text-600 text-sm">Verificando disponibilidad de la agenda...</span>
+                                            </div>
+                                        )}
+                                        {addSubValidationState === 'success' && addSubValidationDetails && (
+                                            <div className="border-round p-3 flex gap-2" style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC' }}>
+                                                <i className="pi pi-check-circle mt-1" style={{ color: '#16A34A', fontSize: '1.1rem' }} />
+                                                <div>
+                                                    <div className="font-semibold" style={{ color: '#166534' }}>Fecha disponible</div>
+                                                    <div className="text-sm mt-1" style={{ color: '#15803D' }}>
+                                                        La carga del día quedaría en {addSubValidationDetails.current_load} h de {addSubValidationDetails.limit} h máx.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {addSubValidationState === 'error' && addSubValidationDetails && (
+                                            <div className="flex flex-column gap-2">
+                                                <div className="border-round p-3" style={{ backgroundColor: '#FFF5F5', border: '1px solid #FCA5A5' }}>
+                                                    <div className="flex gap-2">
+                                                        <i className="pi pi-exclamation-circle mt-1" style={{ color: '#DC2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                                                        <div>
+                                                            <div className="font-semibold" style={{ color: '#991B1B' }}>Fecha no disponible</div>
+                                                            <div className="text-sm mt-1" style={{ color: '#B91C1C' }}>
+                                                                Carga estimada: {addSubValidationDetails.current_load} h — Límite: {addSubValidationDetails.limit} h
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {Array.isArray(addSubValidationDetails.suggestions) && addSubValidationDetails.suggestions.length > 0 && (
+                                                    <div>
+                                                        <div className="text-sm font-semibold mb-2" style={{ color: '#4338CA' }}>Fechas sugeridas — haz clic para aplicar:</div>
+                                                        <div className="flex flex-column gap-2">
+                                                            {addSubValidationDetails.suggestions.map((sug, idx) => (
+                                                                <button
+                                                                    key={idx}
+                                                                    type="button"
+                                                                    onClick={() => handleApplyAddSubSuggestion(sug.tentative_date)}
+                                                                    className="flex align-items-center justify-content-between p-2 border-round w-full cursor-pointer"
+                                                                    style={{ border: '1px solid #E2E8F0', backgroundColor: '#FAFAFA', textAlign: 'left' }}
+                                                                >
+                                                                    <div className="flex align-items-center gap-2">
+                                                                        <i className="pi pi-calendar text-500" />
+                                                                        <span className="text-sm text-900">
+                                                                            {new Date(sug.tentative_date).toLocaleString('es-CO')}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-xs font-medium px-2 py-1 border-round" style={{ color: '#16A34A', backgroundColor: '#F0FDF4' }}>
+                                                                        {sug.current_load} h
+                                                                    </span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         <div className="flex justify-content-end">
                                             <Button
@@ -899,6 +1131,7 @@ const ActivitiesPage = () => {
                                                 label="Guardar subtarea"
                                                 icon="pi pi-check"
                                                 loading={subtaskLoading}
+                                                disabled={addSubValidationState !== 'success' || subtaskLoading}
                                             />
                                         </div>
                                     </form>
@@ -966,21 +1199,6 @@ const ActivitiesPage = () => {
                                 <InputTextarea id="editActivityDescription" value={editingActivity.description || ''} onChange={(e) => setEditingActivity((prev) => (prev ? { ...prev, description: e.target.value } : prev))} rows={3} />
                             </div>
 
-                            <div className="grid">
-                                <div className="col-12 md:col-6">
-                                    <div className="flex flex-column gap-2">
-                                        <label htmlFor="editActivityEventDate" className="font-semibold">Fecha del evento</label>
-                                        <InputText id="editActivityEventDate" type="datetime-local" value={dateTimeToInputValue(editingActivity.event_date)} onChange={(e) => setEditingActivity((prev) => (prev ? { ...prev, event_date: e.target.value } : prev))} />
-                                    </div>
-                                </div>
-                                <div className="col-12 md:col-6">
-                                    <div className="flex flex-column gap-2">
-                                        <label htmlFor="editActivityDeadline" className="font-semibold">Fecha límite</label>
-                                        <InputText id="editActivityDeadline" type="datetime-local" value={dateTimeToInputValue(editingActivity.deadline)} onChange={(e) => setEditingActivity((prev) => (prev ? { ...prev, deadline: e.target.value } : prev))} />
-                                    </div>
-                                </div>
-                            </div>
-
                             <div className="flex justify-content-end gap-2">
                                 <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setActivityEditDialogVisible(false); setActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
@@ -1024,6 +1242,66 @@ const ActivitiesPage = () => {
                                 <InputText id="editSubActivityEstimatedTime" type="number" min={1} value={String(editingSubActivity.estimated_time ?? '')} onChange={(e) => setEditingSubActivity((prev) => (prev ? { ...prev, estimated_time: e.target.value } : prev))} />
                             </div>
 
+                            {/* ─── Validation zone ─── */}
+                            {subEditValidationState === 'checking' && (
+                                <div className="border-round p-3 flex align-items-center gap-2" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                    <i className="pi pi-spin pi-spinner text-primary" />
+                                    <span className="text-600 text-sm">Verificando disponibilidad de la agenda...</span>
+                                </div>
+                            )}
+                            {subEditValidationState === 'success' && subEditValidationDetails && (
+                                <div className="border-round p-3 flex gap-2" style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC' }}>
+                                    <i className="pi pi-check-circle mt-1" style={{ color: '#16A34A', fontSize: '1.1rem' }} />
+                                    <div>
+                                        <div className="font-semibold" style={{ color: '#166534' }}>Fecha disponible</div>
+                                        <div className="text-sm mt-1" style={{ color: '#15803D' }}>
+                                            La carga del día quedaría en {subEditValidationDetails.current_load} h de {subEditValidationDetails.limit} h máx.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {subEditValidationState === 'error' && subEditValidationDetails && (
+                                <div className="flex flex-column gap-2">
+                                    <div className="border-round p-3" style={{ backgroundColor: '#FFF5F5', border: '1px solid #FCA5A5' }}>
+                                        <div className="flex gap-2">
+                                            <i className="pi pi-exclamation-circle mt-1" style={{ color: '#DC2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                                            <div>
+                                                <div className="font-semibold" style={{ color: '#991B1B' }}>Fecha no disponible</div>
+                                                <div className="text-sm mt-1" style={{ color: '#B91C1C' }}>
+                                                    Carga estimada: {subEditValidationDetails.current_load} h — Límite: {subEditValidationDetails.limit} h
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {Array.isArray(subEditValidationDetails.suggestions) && subEditValidationDetails.suggestions.length > 0 && (
+                                        <div>
+                                            <div className="text-sm font-semibold mb-2" style={{ color: '#4338CA' }}>Fechas sugeridas — haz clic para aplicar:</div>
+                                            <div className="flex flex-column gap-2">
+                                                {subEditValidationDetails.suggestions.map((sug, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => handleApplySubEditSuggestion(sug.tentative_date)}
+                                                        className="flex align-items-center justify-content-between p-2 border-round w-full cursor-pointer"
+                                                        style={{ border: '1px solid #E2E8F0', backgroundColor: '#FAFAFA', textAlign: 'left' }}
+                                                    >
+                                                        <div className="flex align-items-center gap-2">
+                                                            <i className="pi pi-calendar text-500" />
+                                                            <span className="text-sm text-900">
+                                                                {new Date(sug.tentative_date).toLocaleString('es-CO')}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-xs font-medium px-2 py-1 border-round" style={{ color: '#16A34A', backgroundColor: '#F0FDF4' }}>
+                                                            {sug.current_load} h
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="flex justify-content-end gap-2">
                                 <Button type="button" label="Cancelar" severity="secondary" outlined onClick={() => { setSubActivityEditDialogVisible(false); setSubActivityEditError(''); }} />
                                 <Button type="submit" label="Guardar cambios" icon="pi pi-check" />
@@ -1048,6 +1326,21 @@ const ActivitiesPage = () => {
                         </div>
                     </div>
                 </Dialog>
+
+                <CreateActivityModal
+                    visible={showCreateModal}
+                    onHide={() => setShowCreateModal(false)}
+                    onSuccess={() => {
+                        fetchActivities();
+                        toastRef.current?.show({
+                            severity: 'success',
+                            summary: '¡Actividad creada!',
+                            detail: 'La actividad fue registrada exitosamente.',
+                            life: 3000,
+                        });
+                        setTimeout(() => router.push('/'), 1500);
+                    }}
+                />
             </div>
         </Card>
     );
